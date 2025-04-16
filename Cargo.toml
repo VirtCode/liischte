@@ -5,9 +5,12 @@ edition = "2024"
 
 [dependencies]
 chrono = "0.4.40"
+anyhow = "*"
 
-tokio = { version = "1.44.1", features = ["rt-multi-thread", "macros", "net", "io-util"] }
+tokio = { version = "1.44.1", features = ["rt-multi-thread", "macros", "net", "io-util", "fs"] }
+tokio-stream = { version = "0.1.17", features = ["fs"] }
 futures = { version = "0.3.31" }
+futures-util = "0.3"
 
 # we use cosmic's iced fork
 iced = { git = "https://github.com/pop-os/iced", features = ["advanced", "tokio", "winit", "wayland", "multi-window"] }
@@ -18,3 +21,6 @@ env_logger = "0.11.7"
 
 serde = { version = "1.0.219", features = ["derive"] }
 serde_json = "1.0.140"
+
+# battery integration
+tokio-udev = "0.9"
