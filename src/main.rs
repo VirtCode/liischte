@@ -1,4 +1,4 @@
-use std::{future::ready, time::Duration};
+use std::time::Duration;
 
 use chrono::{DateTime, Local, Timelike};
 use futures::StreamExt;
@@ -6,24 +6,20 @@ use iced::{
     Color, Font, Length, Limits, Subscription, Task, Theme,
     alignment::Horizontal,
     application, color,
-    font::Weight,
     runtime::platform_specific::wayland::layer_surface::{
         IcedMargin, IcedOutput, SctkLayerSurfaceSettings,
     },
     time,
-    widget::{Column, button, column, text, text_input},
+    widget::{column, text, vertical_space},
     window::Id as SurfaceId,
 };
 use iced_winit::commands::{
     layer_surface::get_layer_surface,
-    subsurface::{Anchor, KeyboardInteractivity, Layer},
+    subsurface::{Anchor, Layer},
 };
-use layer_shell::layer_window;
-use log::{error, info};
-use tokio_udev::{AsyncMonitorSocket, MonitorBuilder};
+use ui::{icon, separator, window::layer_window};
 
-mod layer_shell;
-mod power;
+mod ui;
 
 pub const FONT: &str = "JetBrains Mono";
 pub const ICON_FONT: &str = "Material Symbols Outlined";
@@ -32,30 +28,25 @@ pub const ICON_FONT: &str = "Material Symbols Outlined";
 async fn main() -> iced::Result {
     env_logger::init_from_env(env_logger::Env::new().default_filter_or("info"));
 
-    let settings = iced::Settings {
-        default_font: Font::with_name("JetBrains Mono"),
-        default_text_size: 16.into(),
-        antialiasing: true,
-
-        id: Some(String::from("liischte")),
-
-        ..Default::default()
-    };
-
     let app = layer_window::<_, Message, _, _, iced::executor::Default>(
-        "En Liischte",
-        Sidebar::update,
-        Sidebar::view,
+        Liischte::update,
+        Liischte::view,
+        Liischte::subscription,
     )
-    .subscription(Sidebar::subscription)
-    .style(|_sidebar, _theme| application::Appearance {
+    .style(|_, _| application::Appearance {
         background_color: Color::TRANSPARENT,
         text_color: color!(0xcdd5ff),
         icon_color: color!(0xcdd5ff),
     })
-    .settings(settings);
+    .settings(iced::Settings {
+        default_font: Font::with_name("JetBrains Mono"),
+        default_text_size: 16.into(),
+        antialiasing: true,
 
-    app.run_with(Sidebar::new)
+        ..Default::default()
+    });
+
+    app.run_with(Liischte::new)
 }
 
 #[derive(Debug, Clone)]
@@ -63,11 +54,11 @@ enum Message {
     Clock(DateTime<Local>),
 }
 
-struct Sidebar {
+struct Liischte {
     time: DateTime<Local>,
 }
 
-impl Sidebar {
+impl Liischte {
     pub fn new() -> (Self, Task<Message>) {
         let padding = 10;
         let width = 32;
@@ -104,11 +95,18 @@ impl Sidebar {
     }
 
     fn view(&self, _: SurfaceId) -> iced::Element<'_, Message, Theme, iced::Renderer> {
-        column![column![].height(Length::Fill), column![
-            text!("{:0>2}", self.time.hour()),
-            text!("{:0>2}", self.time.minute()),
-            text!("{:0>2}", self.time.second())
-        ]]
+        column![
+            column![],
+            vertical_space(),
+            column![icon(''), icon(''), icon('')].spacing(4),
+            separator(),
+            column![
+                text!("{:0>2}", self.time.hour()),
+                text!("{:0>2}", self.time.minute()),
+                text!("{:0>2}", self.time.second())
+            ]
+        ]
+        .spacing(12)
         .align_x(Horizontal::Center)
         .width(Length::Fill)
         .into()

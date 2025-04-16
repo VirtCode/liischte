@@ -52,9 +52,9 @@ where
 
 /// Creates an iced [`MultiWindow`] given its title, update, and view logic.
 pub fn layer_window<State, Message, Theme, Renderer, Executor>(
-    title: impl Title<State>,
     update: impl application::Update<State, Message>,
     view: impl for<'a> self::View<'a, State, Message, Theme, Renderer>,
+    subscription: impl Fn(&State) -> Subscription<Message>,
 ) -> LayerMultiWindow<impl Program<State = State, Message = Message, Theme = Theme>>
 where
     State: 'static,
@@ -78,7 +78,7 @@ where
         settings: Settings::default(),
         window: None,
     }
-    .title(title)
+    .subscription(subscription)
 }
 
 /// An iced daemon window which allows to run without a main window
