@@ -1,24 +1,31 @@
-use std::time::Duration;
+use std::{
+    any::{Any, TypeId},
+    collections::HashMap,
+    time::Duration,
+};
 
 use chrono::{DateTime, Local, Timelike};
 use futures::StreamExt;
 use iced::{
     Color, Font, Length, Limits, Subscription, Task, Theme,
+    advanced::subscription,
     alignment::Horizontal,
     application, color,
     runtime::platform_specific::wayland::layer_surface::{
         IcedMargin, IcedOutput, SctkLayerSurfaceSettings,
     },
     time,
-    widget::{column, text, vertical_space},
+    widget::{Column, column, text, vertical_space},
     window::Id as SurfaceId,
 };
 use iced_winit::commands::{
     layer_surface::get_layer_surface,
     subsurface::{Anchor, Layer},
 };
+use status::{AbstractStatus, DemoStatus, Status, StatusMessage};
 use ui::{icon, separator, window::layer_window};
 
+mod status;
 mod ui;
 
 pub const FONT: &str = "JetBrains Mono";
@@ -52,10 +59,12 @@ async fn main() -> iced::Result {
 #[derive(Debug, Clone)]
 enum Message {
     Clock(DateTime<Local>),
+    StatusMessage(Box<dyn StatusMessage>),
 }
 
 struct Liischte {
     time: DateTime<Local>,
+    status: HashMap<TypeId, Box<dyn AbstractStatus>>,
 }
 
 impl Liischte {
@@ -79,36 +88,52 @@ impl Liischte {
             ..Default::default()
         });
 
-        (Self { time: Local::now() }, surface)
+        let mut status = HashMap::new();
+
+        let demo = DemoStatus {};
+        let b: Box<dyn AbstractStatus> = Box::new(demo);
+
+        status.insert(b.message_type(), b);
+        (Self { time: Local::now(), status }, surface)
     }
 
     fn update(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::Clock(time) => self.time = time,
+            Message::StatusMessage(msg) => {
+                self.status.get_mut(&(*msg).type_id()).expect("wth").update(msg)
+            }
         }
 
         Task::none()
     }
 
     fn subscription(&self) -> Subscription<Message> {
-        time::every(Duration::from_secs(1)).map(|_| Message::Clock(Local::now()))
+        Subscription::batch(vec![
+            time::every(Duration::from_secs(1)).map(|_| Message::Clock(Local::now())),
+            // messages for status
+            Subscription::batch(
+                self.status.values().map(|status| status.subscribe().map(Message::StatusMessage)),
+            ),
+        ])
     }
 
     fn view(&self, _: SurfaceId) -> iced::Element<'_, Message, Theme, iced::Renderer> {
-        column![
-            column![],
-            vertical_space(),
-            column![icon(''), icon(''), icon('')].spacing(4),
-            separator(),
-            column![
-                text!("{:0>2}", self.time.hour()),
-                text!("{:0>2}", self.time.minute()),
-                text!("{:0>2}", self.time.second())
-            ]
-        ]
-        .spacing(12)
-        .align_x(Horizontal::Center)
-        .width(Length::Fill)
-        .into()
+        let status = Column::from_iter(
+            self.status.values().map(|status| status.render().map(Message::StatusMessage)),
+        )
+        .spacing(4);
+
+        let clock = column![
+            text!("{:0>2}", self.time.hour()),
+            text!("{:0>2}", self.time.minute()),
+            text!("{:0>2}", self.time.second())
+        ];
+
+        column![vertical_space(), status, separator(), clock]
+            .spacing(12)
+            .align_x(Horizontal::Center)
+            .width(Length::Fill)
+            .into()
     }
 }
