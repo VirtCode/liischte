@@ -23,13 +23,13 @@ use iced_winit::commands::{
     layer_surface::get_layer_surface,
     subsurface::{Anchor, Layer},
 };
-use log::{debug, info, trace};
+use log::{info, trace};
 use lucide_icons::lucide_font_bytes;
 use status::{AbstractStatus, Status, StatusMessage, power::PowerStatus};
 use ui::{separator, window::layer_window};
 
+pub mod info;
 mod status;
-pub mod system;
 mod ui;
 
 #[tokio::main]

@@ -1,10 +1,9 @@
-use std::{any::TypeId, fmt::Debug, time::Duration};
+use std::{any::TypeId, fmt::Debug};
 
 use async_trait::async_trait;
-use chrono::{Local, Timelike};
 use downcast::{Any, Downcast, downcast};
 use dyn_clone::{DynClone, clone_trait_object};
-use iced::{Element, Renderer, Subscription, Theme, time, widget::text};
+use iced::{Element, Renderer, Subscription, Theme};
 
 pub mod power;
 

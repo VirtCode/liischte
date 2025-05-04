@@ -1,7 +1,7 @@
 // blatantly stolen from https://github.com/jeandudey/tokio-udev/blob/master/tokio-udev/src/lib.rs but I need it to be send
 
 use futures_core::stream::Stream;
-use std::{convert::TryFrom, io, pin::Pin, sync::Mutex, task::Poll};
+use std::{io, pin::Pin, sync::Mutex, task::Poll};
 use tokio::io::unix::AsyncFd;
 use udev::{Event, MonitorSocket};
 

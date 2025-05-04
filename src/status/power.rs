@@ -1,24 +1,26 @@
 use std::{
     hash::Hasher,
-    path::{Path, PathBuf},
+    time::Duration,
 };
 
-use anyhow::{Context, Result};
 use async_trait::async_trait;
 use futures::{FutureExt, StreamExt, stream};
 use iced::{
-    Element, Renderer, Subscription, Theme,
+    Background, Color, Element, Length, Renderer, Subscription, Theme,
     advanced::subscription::{EventStream, Recipe, from_recipe},
-    event::listen,
+    widget::{Space, container, stack},
 };
 use iced_winit::futures::BoxStream;
-use log::{debug, error, info, warn};
+use log::{debug, error, info};
 use lucide_icons::Icon;
-use tokio::fs;
-use tokio_stream::wrappers::ReadDirStream;
-use udev::MonitorBuilder;
 
-use crate::{system::udev::AsyncMonitorSocket, ui::icon};
+use crate::{
+    info::power::{
+        PowerDevice, listen_ac_online, listen_battery_charge, read_ac_online,
+        read_battery_capacity, read_battery_charge, read_devices,
+    },
+    ui::icon,
+};
 
 use super::{Status, StatusMessage};
 
@@ -26,10 +28,29 @@ impl StatusMessage for PowerStatusMessage {}
 #[derive(Clone, Debug)]
 pub enum PowerStatusMessage {
     AcOnlineMessage(bool),
+    BatteryChargeMessage(usize, f64),
+}
+
+struct Ac {
+    device: PowerDevice,
+
+    /// is the ac adapter providing power
+    online: bool,
+}
+
+struct Battery {
+    device: PowerDevice,
+
+    /// capacity the batter has in Wh
+    capacity: f64,
+    /// current charge of the battery from 0 to 1
+    charge: f64,
 }
 
 pub struct PowerStatus {
+    /// tracked ac adapter
     ac: Option<Ac>,
+    /// batteries which are considered
     batteries: Vec<Battery>,
 }
 
@@ -49,128 +70,111 @@ impl Status for PowerStatus {
         let use_ac = &None::<String>;
         let use_batteries: Vec<String> = vec![];
 
-        let devices = fs::read_dir("/sys/class/power_supply")
-            .await
-            .context("`power_supply` sysfs is required for battery information")
-            .unwrap();
+        for device in read_devices().await.unwrap() {
+            debug!("checking power device with name '{}'", &device.name);
 
-        let devices = ReadDirStream::new(devices)
-            .filter_map(async |result| result.ok().map(|a| a.path()))
-            .collect::<Vec<_>>()
-            .await;
-
-        for path in devices {
-            let Some(name) = path.file_name() else { continue };
-            let name = name.to_string_lossy().to_string();
-
-            debug!("checking power device with name '{name}'");
-
-            if use_ac.as_ref().map(|ac| *ac == name).unwrap_or_default()
-                || (use_ac.is_none() && self.ac.is_none() && name.starts_with("AC"))
+            if use_ac.as_ref().map(|ac| *ac == device.name).unwrap_or_default()
+                || (use_ac.is_none() && self.ac.is_none() && device.name.starts_with("AC"))
             {
-                self.ac = Some(Ac { path, name, status: false })
-            } else if use_batteries.iter().any(|bat| *bat == name)
-                || (use_batteries.is_empty() && name.starts_with("BAT"))
+                self.ac = Some(Ac { online: read_ac_online(&device).await.unwrap(), device })
+            } else if use_batteries.iter().any(|bat| *bat == device.name)
+                || (use_batteries.is_empty() && device.name.starts_with("BAT"))
             {
                 self.batteries.push(Battery {
-                    path,
-                    name,
-                    capacity: 0f32,
-                    charge: 0f32,
-                    state: BatteryState::Unknown,
+                    capacity: read_battery_capacity(&device).await.unwrap(),
+                    charge: read_battery_charge(&device).await.unwrap(),
+                    device,
                 });
             }
         }
 
         info!(
             "using ac {} and batteries [{}]",
-            self.ac.as_ref().map(|ac| ac.name.as_str()).unwrap_or("<none>"),
-            self.batteries.iter().map(|bat| bat.name.as_str()).collect::<Vec<_>>().join(", ")
+            self.ac.as_ref().map(|ac| ac.device.name.as_str()).unwrap_or("<none>"),
+            self.batteries
+                .iter()
+                .map(|bat| bat.device.name.as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
         );
-
-        if let Some(ac) = &self.ac {
-            debug!("listening to ac adapter over udev");
-        }
     }
 
     fn subscribe(&self) -> Subscription<Self::Message> {
-        if let Some(ac) = &self.ac {
-            from_recipe(AcEvents::new(&ac.name, &ac.path)).map(PowerStatusMessage::AcOnlineMessage)
-        } else {
-            Subscription::none()
-        }
+        let polling_rate = Duration::from_secs(30);
+
+        Subscription::batch(vec![
+            Subscription::batch(self.batteries.iter().enumerate().map(|(i, bat)| {
+                from_recipe(ChargeMonitor(bat.device.clone(), polling_rate))
+                    .with(i)
+                    .map(|(i, c)| PowerStatusMessage::BatteryChargeMessage(i, c))
+            })),
+            self.ac
+                .as_ref()
+                .map(|ac| {
+                    from_recipe(OnlineMonitor(ac.device.clone()))
+                        .map(PowerStatusMessage::AcOnlineMessage)
+                })
+                .unwrap_or_else(Subscription::none),
+        ])
     }
 
     fn update(&mut self, message: &Self::Message) {
         match message {
             PowerStatusMessage::AcOnlineMessage(online) => {
                 if let Some(ac) = &mut self.ac {
-                    ac.status = *online;
+                    ac.online = *online;
+                }
+            }
+            PowerStatusMessage::BatteryChargeMessage(i, charge) => {
+                if let Some(bat) = self.batteries.get_mut(*i) {
+                    bat.charge = *charge
                 }
             }
         }
     }
 
     fn render(&self) -> Element<'_, Self::Message, Theme, Renderer> {
-        icon(if self.ac.as_ref().map(|ac| ac.status).unwrap_or_default() {
-            Icon::BatteryCharging
+        let warning = 0.1;
+
+        if self.ac.as_ref().map(|ac| ac.online).unwrap_or_default() {
+            icon(Icon::BatteryCharging).into()
         } else {
-            Icon::Battery
-        })
-        .into()
+            let total = self.batteries.iter().map(|bat| bat.capacity).sum::<f64>();
+            let charge =
+                self.batteries.iter().map(|bat| (bat.capacity / total) * bat.charge).sum::<f64>();
+
+            if charge < warning {
+                icon(Icon::BatteryWarning).into()
+            } else {
+                stack![
+                    icon(Icon::Battery),
+                    container(container(Space::new(Length::Fill, Length::Fill)).style(|_| {
+                        container::Style {
+                            background: Some(Background::Color(Color::WHITE)),
+                            ..Default::default()
+                        }
+                    }))
+                    .padding([15, 19 - (10f64 * charge) as u16, 15, 5]),
+                ]
+                .into()
+            }
+        }
     }
 }
 
-struct AcEvents {
-    path: PathBuf,
-    name: String,
-}
+struct OnlineMonitor(PowerDevice);
 
-impl AcEvents {
-    pub fn new(name: &str, path: &Path) -> Self {
-        Self { name: name.to_string(), path: path.to_owned() }
-    }
-
-    pub fn start_listener(&self) -> Result<BoxStream<bool>> {
-        let socket = MonitorBuilder::new()?
-            .match_subsystem_devtype("power_supply", "power_supply")?
-            .listen()?;
-
-        // yeah, cooked
-        let name = Box::new(self.name.clone()).leak();
-        let path = Box::leak(Box::new(self.path.clone()));
-
-        let stream = AsyncMonitorSocket::new(socket)?
-            .filter_map(async |r| {
-                r.ok().and_then(|e| {
-                    if e.sysname().to_string_lossy() == *name { Some(()) } else { None }
-                })
-            })
-            .then(async |_| fs::read_to_string(path.join("online")).await.map(|s| s.trim() == "1"))
-            .filter_map(async |r| match r {
-                Ok(b) => Some(b),
-                Err(e) => {
-                    warn!("failed to read sysfs `online` file for ac: {e:#}");
-                    None
-                }
-            })
-            .boxed();
-
-        Ok(stream)
-    }
-}
-
-impl Recipe for AcEvents {
+impl Recipe for OnlineMonitor {
     type Output = bool;
 
     fn hash(&self, state: &mut iced::advanced::subscription::Hasher) {
-        state.write_str(&format!("udev ac events for {}", self.name));
+        state.write_str(&format!("ac online events for {}", self.0.name));
     }
 
     fn stream(self: Box<Self>, _input: EventStream) -> BoxStream<Self::Output> {
-        debug!("staring udev ac listener for {}", self.name);
+        debug!("staring ac online listener for {}", self.0.name);
 
-        match self.start_listener() {
+        match listen_ac_online(self.0) {
             Ok(s) => s,
             Err(e) => {
                 error!("failed to start ac listening: {e:#}");
@@ -180,42 +184,17 @@ impl Recipe for AcEvents {
     }
 }
 
-///! Implementation of power information using events from udev and the
-///! power_supply sysfs
-///! https://www.kernel.org/doc/Documentation/ABI/testing/sysfs-class-power
-///! https://www.kernel.org/doc/Documentation/power/power_supply_class.rst
+struct ChargeMonitor(PowerDevice, Duration);
 
-/// status of an ac adapter
-struct Ac {
-    /// path in the sysfs
-    path: PathBuf,
-    /// name of the adapter
-    name: String,
+impl Recipe for ChargeMonitor {
+    type Output = f64;
 
-    /// is the ac adapter providing power
-    status: bool,
-}
+    fn hash(&self, state: &mut iced::advanced::subscription::Hasher) {
+        state.write_str(&format!("battery charge events for {}", self.0.name));
+    }
 
-/// status of a battery
-struct Battery {
-    /// path in the sysfs
-    path: PathBuf,
-    /// name of the battery
-    name: String,
-
-    /// capacity the batter has in Wh
-    capacity: f32,
-    /// current charge of the battery from 0 to 1
-    charge: f32,
-    /// status of the battery
-    state: BatteryState,
-}
-
-/// different statuses a battery can have
-enum BatteryState {
-    Unknown,
-    Charging,
-    Discharging,
-    NotCharging,
-    Full,
+    fn stream(self: Box<Self>, _input: EventStream) -> BoxStream<Self::Output> {
+        debug!("starting battery charge listener for {}", self.0.name);
+        listen_battery_charge(self.0, self.1)
+    }
 }
