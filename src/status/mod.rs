@@ -1,14 +1,12 @@
-use std::{
-    any::{TypeId, type_name},
-    fmt::Debug,
-    time::Duration,
-};
+use std::{any::TypeId, fmt::Debug, time::Duration};
 
 use async_trait::async_trait;
 use chrono::{Local, Timelike};
 use downcast::{Any, Downcast, downcast};
 use dyn_clone::{DynClone, clone_trait_object};
 use iced::{Element, Renderer, Subscription, Theme, time, widget::text};
+
+pub mod power;
 
 /// this trait makes sure downcasting works for the message of the custom status
 pub trait StatusMessage: DynClone + Any + Send + Debug {}
@@ -76,36 +74,5 @@ impl<T: Status> AbstractStatus for T {
 
     fn render(&self) -> Element<'_, Box<dyn StatusMessage>, Theme, Renderer> {
         Status::render(self).map(|msg| -> Box<dyn StatusMessage> { Box::new(msg) })
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct DemoStatusMessage {
-    pub message: String,
-}
-impl StatusMessage for DemoStatusMessage {}
-
-pub struct DemoStatus {}
-
-#[async_trait]
-impl Status for DemoStatus {
-    type Message = DemoStatusMessage;
-
-    async fn initialize(&mut self) {
-        println!("initializing amogus")
-    }
-
-    fn subscribe(&self) -> Subscription<Self::Message> {
-        time::every(Duration::from_secs(1))
-            .map(|_| DemoStatusMessage { message: "hello there".to_owned() })
-    }
-
-    fn update(&mut self, message: &Self::Message) {
-        println!("received message: {}", message.message)
-    }
-
-    fn render(&self) -> Element<'_, Self::Message, Theme, Renderer> {
-        let time = Local::now();
-        text!("{:0>2}", time.second()).into()
     }
 }

@@ -2,6 +2,7 @@ use iced::{
     Font, Radius, color,
     widget::{Rule, Text, horizontal_rule, rule, text},
 };
+use lucide_icons::Icon;
 
 pub mod window;
 
@@ -16,6 +17,6 @@ pub fn separator<'a>() -> Rule<'a> {
 }
 
 /// creates an icon with the lucide icon font
-pub fn icon<'a>(unicode: char) -> Text<'a> {
-    text(unicode).font(Font::with_name("lucide")).size(24)
+pub fn icon<'a>(icon: Icon) -> Text<'a> {
+    text(icon.unicode()).font(Font::with_name("lucide")).size(24)
 }

@@ -1765,15 +1765,17 @@ dependencies = [
  "dyn-clone",
  "env_logger",
  "futures",
+ "futures-core",
  "futures-util",
  "iced",
  "iced_winit",
  "log",
+ "lucide-icons",
  "serde",
  "serde_json",
  "tokio",
  "tokio-stream",
- "tokio-udev",
+ "udev",
 ]
 
 [[package]]
@@ -1815,6 +1817,12 @@ name = "log"
 version = "0.4.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "13dc2df351e3202783a1fe0d44375f7295ffb4049267b0f3018346dc122a1d94"
+
+[[package]]
+name = "lucide-icons"
+version = "0.507.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ad7325835c743cc5070ce8acabd51ab98404b12b32183a933171ed201d8ae7df"
 
 [[package]]
 name = "malloc_buf"
@@ -3167,17 +3175,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "tokio-udev"
-version = "0.9.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f25418da261774ef3dcae985951bc138cf5fd49b3f4bd7450124ca75af8ed142"
-dependencies = [
- "futures-core",
- "tokio",
- "udev",
-]
-
-[[package]]
 name = "toml_datetime"
 version = "0.6.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3262,10 +3259,11 @@ checksum = "1dccffe3ce07af9386bfd29e80c0ab1a8205a2fc34e4bcd40364df902cfa8f3f"
 
 [[package]]
 name = "udev"
-version = "0.7.0"
+version = "0.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4ebdbbd670373442a12fe9ef7aeb53aec4147a5a27a00bbc3ab639f08f48191a"
+checksum = "af4e37e9ea4401fc841ff54b9ddfc9be1079b1e89434c1a6a865dd68980f7e9f"
 dependencies = [
+ "io-lifetimes",
  "libc",
  "libudev-sys",
  "pkg-config",

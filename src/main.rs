@@ -1,3 +1,5 @@
+#![feature(hasher_prefixfree_extras)]
+
 use std::{
     any::{Any, TypeId},
     collections::HashMap,
@@ -8,7 +10,6 @@ use chrono::{DateTime, Local, Timelike};
 use futures::StreamExt;
 use iced::{
     Color, Font, Length, Limits, Subscription, Task, Theme,
-    advanced::subscription,
     alignment::Horizontal,
     application, color,
     runtime::platform_specific::wayland::layer_surface::{
@@ -22,14 +23,14 @@ use iced_winit::commands::{
     layer_surface::get_layer_surface,
     subsurface::{Anchor, Layer},
 };
-use status::{AbstractStatus, DemoStatus, Status, StatusMessage};
-use ui::{icon, separator, window::layer_window};
+use log::{debug, info, trace};
+use lucide_icons::lucide_font_bytes;
+use status::{AbstractStatus, Status, StatusMessage, power::PowerStatus};
+use ui::{separator, window::layer_window};
 
 mod status;
+pub mod system;
 mod ui;
-
-pub const FONT: &str = "JetBrains Mono";
-pub const ICON_FONT: &str = "Material Symbols Outlined";
 
 #[tokio::main]
 async fn main() -> iced::Result {
@@ -49,26 +50,19 @@ async fn main() -> iced::Result {
         default_font: Font::with_name("JetBrains Mono"),
         default_text_size: 16.into(),
         antialiasing: true,
-
+        fonts: vec![lucide_font_bytes().into()],
         ..Default::default()
     });
 
-    app.run_with(Liischte::new)
-}
+    let mut liischte = Liischte::new();
 
-#[derive(Debug, Clone)]
-enum Message {
-    Clock(DateTime<Local>),
-    StatusMessage(Box<dyn StatusMessage>),
-}
+    // add statusses
+    liischte.add_status(Box::new(PowerStatus::new()));
 
-struct Liischte {
-    time: DateTime<Local>,
-    status: HashMap<TypeId, Box<dyn AbstractStatus>>,
-}
+    liischte.initialize().await;
 
-impl Liischte {
-    pub fn new() -> (Self, Task<Message>) {
+    // run iced app with surface
+    app.run_with(move || {
         let padding = 10;
         let width = 32;
 
@@ -88,19 +82,47 @@ impl Liischte {
             ..Default::default()
         });
 
-        let mut status = HashMap::new();
+        (liischte, surface)
+    })
+}
 
-        let demo = DemoStatus {};
-        let b: Box<dyn AbstractStatus> = Box::new(demo);
+#[derive(Debug, Clone)]
+enum Message {
+    Clock(DateTime<Local>),
+    Status(Box<dyn StatusMessage>),
+}
 
-        status.insert(b.message_type(), b);
-        (Self { time: Local::now(), status }, surface)
+struct Liischte {
+    time: DateTime<Local>,
+    status: HashMap<TypeId, Box<dyn AbstractStatus>>,
+}
+
+impl Liischte {
+    pub fn new() -> Self {
+        Self { status: HashMap::new(), time: Local::now() }
+    }
+
+    pub async fn initialize(&mut self) {
+        info!("initializing all widgets");
+
+        for status in self.status.values_mut() {
+            status.initialize().await
+        }
+    }
+
+    pub fn add_status(&mut self, status: Box<dyn AbstractStatus>) {
+        self.status.insert(status.message_type(), status);
     }
 
     fn update(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::Clock(time) => self.time = time,
-            Message::StatusMessage(msg) => {
+            Message::Status(msg) => {
+                trace!(
+                    "passing status message {}",
+                    (*msg).type_name().rsplit("::").next().unwrap_or_default()
+                );
+
                 self.status.get_mut(&(*msg).type_id()).expect("wth").update(msg)
             }
         }
@@ -113,14 +135,14 @@ impl Liischte {
             time::every(Duration::from_secs(1)).map(|_| Message::Clock(Local::now())),
             // messages for status
             Subscription::batch(
-                self.status.values().map(|status| status.subscribe().map(Message::StatusMessage)),
+                self.status.values().map(|status| status.subscribe().map(Message::Status)),
             ),
         ])
     }
 
     fn view(&self, _: SurfaceId) -> iced::Element<'_, Message, Theme, iced::Renderer> {
         let status = Column::from_iter(
-            self.status.values().map(|status| status.render().map(Message::StatusMessage)),
+            self.status.values().map(|status| status.render().map(Message::Status)),
         )
         .spacing(4);
 
