@@ -3,11 +3,11 @@
 use std::{
     any::{Any, TypeId},
     collections::HashMap,
-    time::Duration,
 };
 
-use chrono::{DateTime, Local, Timelike};
+use clock::{Clock, ClockMessage};
 use futures::StreamExt;
+use hyprland::{Hyprland, HyprlandMessage};
 use iced::{
     Color, Font, Length, Limits, Subscription, Task, Theme,
     alignment::Horizontal,
@@ -15,8 +15,7 @@ use iced::{
     runtime::platform_specific::wayland::layer_surface::{
         IcedMargin, IcedOutput, SctkLayerSurfaceSettings,
     },
-    time,
-    widget::{Column, column, text, vertical_space},
+    widget::{Column, column, vertical_space},
     window::Id as SurfaceId,
 };
 use iced_winit::commands::{
@@ -28,8 +27,11 @@ use lucide_icons::lucide_font_bytes;
 use status::{AbstractStatus, Status, StatusMessage, power::PowerStatus};
 use ui::{separator, window::layer_window};
 
-pub mod info;
+mod clock;
+mod hyprland;
 mod status;
+
+pub mod info;
 mod ui;
 
 #[tokio::main]
@@ -71,7 +73,7 @@ async fn main() -> iced::Result {
             anchor: Anchor::TOP | Anchor::LEFT | Anchor::BOTTOM,
             output: IcedOutput::Active,
 
-            margin: IcedMargin { bottom: padding, left: padding, top: padding, right: 0 },
+            margin: IcedMargin { bottom: padding + 8, left: padding, top: padding + 8, right: 0 },
             size: Some((Some(width), None)),
             exclusive_zone: width as i32,
             size_limits: Limits::NONE,
@@ -88,22 +90,26 @@ async fn main() -> iced::Result {
 
 #[derive(Debug, Clone)]
 enum Message {
-    Clock(DateTime<Local>),
+    Clock(ClockMessage),
+    Hyprland(HyprlandMessage),
     Status(Box<dyn StatusMessage>),
 }
 
 struct Liischte {
-    time: DateTime<Local>,
+    clock: Clock,
+    hyprland: Hyprland,
     status: HashMap<TypeId, Box<dyn AbstractStatus>>,
 }
 
 impl Liischte {
     pub fn new() -> Self {
-        Self { status: HashMap::new(), time: Local::now() }
+        Self { status: HashMap::new(), clock: Clock::new(), hyprland: Hyprland::new() }
     }
 
     pub async fn initialize(&mut self) {
         info!("initializing all widgets");
+
+        self.hyprland.initialize().await;
 
         for status in self.status.values_mut() {
             status.initialize().await
@@ -116,7 +122,8 @@ impl Liischte {
 
     fn update(&mut self, message: Message) -> Task<Message> {
         match message {
-            Message::Clock(time) => self.time = time,
+            Message::Clock(msg) => self.clock.update(msg),
+            Message::Hyprland(msg) => self.hyprland.update(msg),
             Message::Status(msg) => {
                 trace!(
                     "passing status message {}",
@@ -132,7 +139,8 @@ impl Liischte {
 
     fn subscription(&self) -> Subscription<Message> {
         Subscription::batch(vec![
-            time::every(Duration::from_secs(1)).map(|_| Message::Clock(Local::now())),
+            self.clock.subscribe().map(Message::Clock),
+            self.hyprland.subscribe().map(Message::Hyprland),
             // messages for status
             Subscription::batch(
                 self.status.values().map(|status| status.subscribe().map(Message::Status)),
@@ -146,13 +154,7 @@ impl Liischte {
         )
         .spacing(4);
 
-        let clock = column![
-            text!("{:0>2}", self.time.hour()),
-            text!("{:0>2}", self.time.minute()),
-            text!("{:0>2}", self.time.second())
-        ];
-
-        column![vertical_space(), status, separator(), clock]
+        column![self.hyprland.render(), vertical_space(), status, separator(), self.clock.render()]
             .spacing(12)
             .align_x(Horizontal::Center)
             .width(Length::Fill)

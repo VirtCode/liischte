@@ -1771,6 +1771,7 @@ dependencies = [
  "iced_winit",
  "log",
  "lucide-icons",
+ "pin-project-lite",
  "serde",
  "serde_json",
  "tokio",

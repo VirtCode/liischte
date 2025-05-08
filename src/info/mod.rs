@@ -1,2 +1,3 @@
+pub mod hyprland;
 pub mod power;
-mod util;
+pub mod util;

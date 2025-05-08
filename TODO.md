@@ -1,0 +1,4 @@
+- [ ] configuration
+- [ ] error handling in initialization logic (move error handling into async constructor)
+- [ ] stream log into CustomStreamExt
+- [ ] map message in render in Clock and Hyprland base module
