@@ -6,21 +6,22 @@ use iced::{
     widget::{column, text},
 };
 
-use crate::Message;
+use crate::{Message, config::CONFIG};
 
 pub type ClockMessage = DateTime<Local>;
 
 pub struct Clock {
+    seconds: bool,
     time: DateTime<Local>,
 }
 
 impl Clock {
     pub fn new() -> Self {
-        Self { time: Local::now() }
+        Self { time: Local::now(), seconds: CONFIG.clock.seconds }
     }
 
     pub fn subscribe(&self) -> Subscription<ClockMessage> {
-        time::every(Duration::from_secs(1)).map(|_| Local::now())
+        time::every(Duration::from_secs(if self.seconds { 1 } else { 60 })).map(|_| Local::now())
     }
 
     pub fn update(&mut self, message: ClockMessage) {
@@ -28,11 +29,15 @@ impl Clock {
     }
 
     pub fn render(&self) -> iced::Element<'_, Message, Theme, iced::Renderer> {
-        column![
-            text!("{:0>2}", self.time.hour()),
-            text!("{:0>2}", self.time.minute()),
-            text!("{:0>2}", self.time.second())
-        ]
+        if self.seconds {
+            column![
+                text!("{:0>2}", self.time.hour()),
+                text!("{:0>2}", self.time.minute()),
+                text!("{:0>2}", self.time.second())
+            ]
+        } else {
+            column![text!("{:0>2}", self.time.hour()), text!("{:0>2}", self.time.minute())]
+        }
         .into()
     }
 }

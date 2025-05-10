@@ -7,10 +7,10 @@ use iced::{
     advanced::subscription::{EventStream, Hasher, Recipe, from_recipe},
     widget::{Space, container::Style},
 };
-use iced::color;
 use iced_winit::futures::BoxStream;
 use log::debug;
 
+use crate::config::CONFIG;
 use crate::{
     Message,
     info::{
@@ -34,18 +34,15 @@ impl Hyprland {
     }
 
     pub async fn initialize(&mut self) {
-        let monitor = 0u64;
-
         self.selected = self.instance.get_active_workspace().await.unwrap().id;
         self.workspaces = self.instance.get_all_workspaces().await.unwrap();
 
-        self.workspaces.retain(|state| state.monitor_id == monitor && state.id >= 0);
+        self.workspaces
+            .retain(|state| state.monitor_id == CONFIG.hyprland.monitor && state.id >= 0);
     }
 
     pub fn subscribe(&self) -> Subscription<HyprlandMessage> {
-        let monitor = 0u64;
-
-        from_recipe(WorkspaceMonitor(self.instance.clone(), monitor))
+        from_recipe(WorkspaceMonitor(self.instance.clone(), CONFIG.hyprland.monitor))
     }
 
     pub fn update(&mut self, message: HyprlandMessage) {
@@ -58,20 +55,25 @@ impl Hyprland {
             self.workspaces
                 .iter()
                 .map(|state| {
-                    let background = match (state.id == self.selected, state.window_amount > 0) {
-                        (true, _) => color!(0x6E6F89),
-                        (false, true) => color!(0xCDD5FF),
-                        _ => Color::TRANSPARENT,
+                    let (background, border) =
+                        match (state.id == self.selected, state.window_amount > 0) {
+                            (true, _) => (CONFIG.looks.semi, CONFIG.hyprland.border),
+                            (false, true) => (CONFIG.looks.foreground, 0f32),
+                            _ => (Color::TRANSPARENT, CONFIG.hyprland.border),
+                        };
+
+                    let radius = if state.fullscreen && CONFIG.hyprland.fullscreen {
+                        3f32 // this is almost no rounding, just for asthetics
+                    } else {
+                        CONFIG.hyprland.rounding
                     };
 
-                    let radius = if state.fullscreen { 6 } else { 6 };
-
-                    container(Space::new(17, 17))
+                    container(Space::new(CONFIG.hyprland.size, CONFIG.hyprland.size))
                         .style(move |_| Style {
                             background: Some(Background::Color(background)),
                             border: Border {
-                                color: color!(0xCDD5FF),
-                                width: 1.5f32,
+                                color: CONFIG.looks.foreground,
+                                width: border,
                                 radius: Radius::new(radius),
                             },
                             ..Default::default()

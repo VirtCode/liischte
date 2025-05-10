@@ -1,17 +1,17 @@
 #![feature(hasher_prefixfree_extras)]
-
 use std::{
     any::{Any, TypeId},
     collections::HashMap,
 };
 
 use clock::{Clock, ClockMessage};
+use config::CONFIG;
 use futures::StreamExt;
 use hyprland::{Hyprland, HyprlandMessage};
 use iced::{
     Color, Font, Length, Limits, Subscription, Task, Theme,
     alignment::Horizontal,
-    application, color,
+    application,
     runtime::platform_specific::wayland::layer_surface::{
         IcedMargin, IcedOutput, SctkLayerSurfaceSettings,
     },
@@ -31,6 +31,7 @@ mod clock;
 mod hyprland;
 mod status;
 
+pub mod config;
 pub mod info;
 mod ui;
 
@@ -45,11 +46,11 @@ async fn main() -> iced::Result {
     )
     .style(|_, _| application::Appearance {
         background_color: Color::TRANSPARENT,
-        text_color: color!(0xcdd5ff),
-        icon_color: color!(0xcdd5ff),
+        text_color: CONFIG.looks.foreground,
+        icon_color: CONFIG.looks.foreground,
     })
     .settings(iced::Settings {
-        default_font: Font::with_name("JetBrains Mono"),
+        default_font: Font::with_name(&CONFIG.looks.font),
         default_text_size: 16.into(),
         antialiasing: true,
         fonts: vec![lucide_font_bytes().into()],
@@ -65,21 +66,25 @@ async fn main() -> iced::Result {
 
     // run iced app with surface
     app.run_with(move || {
-        let padding = 10;
-        let width = 32;
-
         let surface = get_layer_surface(SctkLayerSurfaceSettings {
             layer: Layer::Top,
-            anchor: Anchor::TOP | Anchor::LEFT | Anchor::BOTTOM,
+            anchor: Anchor::TOP
+                | if CONFIG.right { Anchor::RIGHT } else { Anchor::LEFT }
+                | Anchor::BOTTOM,
             output: IcedOutput::Active,
 
-            margin: IcedMargin { bottom: padding + 8, left: padding, top: padding + 8, right: 0 },
-            size: Some((Some(width), None)),
-            exclusive_zone: width as i32,
+            margin: IcedMargin {
+                bottom: CONFIG.looks.padding as i32,
+                left: CONFIG.looks.padding as i32,
+                top: CONFIG.looks.padding as i32,
+                right: 0,
+            },
+            size: Some((Some(CONFIG.looks.width), None)),
+            exclusive_zone: CONFIG.looks.width as i32,
             size_limits: Limits::NONE,
 
             pointer_interactivity: true,
-            namespace: String::from("liischte"),
+            namespace: CONFIG.namespace.clone(),
 
             ..Default::default()
         });

@@ -1,7 +1,4 @@
-use std::{
-    hash::Hasher,
-    time::Duration,
-};
+use std::{hash::Hasher, time::Duration};
 
 use async_trait::async_trait;
 use futures::{FutureExt, StreamExt, stream};
@@ -13,8 +10,10 @@ use iced::{
 use iced_winit::futures::BoxStream;
 use log::{debug, error, info};
 use lucide_icons::Icon;
+use serde::Deserialize;
 
 use crate::{
+    config::CONFIG,
     info::power::{
         PowerDevice, listen_ac_online, listen_battery_charge, read_ac_online,
         read_battery_capacity, read_battery_charge, read_devices,
@@ -23,6 +22,27 @@ use crate::{
 };
 
 use super::{Status, StatusMessage};
+
+#[derive(Deserialize)]
+#[serde(default)]
+struct PowerStatusConfig {
+    /// force the use of a specific ac adapter
+    ac: Option<String>,
+    /// force the use of a specific set of batteries
+    batteries: Vec<String>,
+
+    /// polling rate to poll battery status in seconds
+    polling_rate: u64,
+
+    /// battery percentage below which it is considered critical
+    critical: f64,
+}
+
+impl Default for PowerStatusConfig {
+    fn default() -> Self {
+        Self { ac: None, batteries: vec![], polling_rate: 30, critical: 0.1 }
+    }
+}
 
 impl StatusMessage for PowerStatusMessage {}
 #[derive(Clone, Debug)]
@@ -48,6 +68,8 @@ struct Battery {
 }
 
 pub struct PowerStatus {
+    config: PowerStatusConfig,
+
     /// tracked ac adapter
     ac: Option<Ac>,
     /// batteries which are considered
@@ -56,7 +78,7 @@ pub struct PowerStatus {
 
 impl PowerStatus {
     pub fn new() -> Self {
-        Self { ac: None, batteries: vec![] }
+        Self { ac: None, batteries: vec![], config: CONFIG.status("power") }
     }
 }
 
@@ -67,18 +89,15 @@ impl Status for PowerStatus {
     async fn initialize(&mut self) {
         info!("reading available power devices from sysfs");
 
-        let use_ac = &None::<String>;
-        let use_batteries: Vec<String> = vec![];
-
         for device in read_devices().await.unwrap() {
             debug!("checking power device with name '{}'", &device.name);
 
-            if use_ac.as_ref().map(|ac| *ac == device.name).unwrap_or_default()
-                || (use_ac.is_none() && self.ac.is_none() && device.name.starts_with("AC"))
+            if self.config.ac.as_ref().map(|ac| *ac == device.name).unwrap_or_default()
+                || (self.config.ac.is_none() && self.ac.is_none() && device.name.starts_with("AC"))
             {
                 self.ac = Some(Ac { online: read_ac_online(&device).await.unwrap(), device })
-            } else if use_batteries.iter().any(|bat| *bat == device.name)
-                || (use_batteries.is_empty() && device.name.starts_with("BAT"))
+            } else if self.config.batteries.iter().any(|bat| *bat == device.name)
+                || (self.config.batteries.is_empty() && device.name.starts_with("BAT"))
             {
                 self.batteries.push(Battery {
                     capacity: read_battery_capacity(&device).await.unwrap(),
@@ -100,13 +119,14 @@ impl Status for PowerStatus {
     }
 
     fn subscribe(&self) -> Subscription<Self::Message> {
-        let polling_rate = Duration::from_secs(30);
-
         Subscription::batch(vec![
             Subscription::batch(self.batteries.iter().enumerate().map(|(i, bat)| {
-                from_recipe(ChargeMonitor(bat.device.clone(), polling_rate))
-                    .with(i)
-                    .map(|(i, c)| PowerStatusMessage::BatteryChargeMessage(i, c))
+                from_recipe(ChargeMonitor(
+                    bat.device.clone(),
+                    Duration::from_secs(self.config.polling_rate),
+                ))
+                .with(i)
+                .map(|(i, c)| PowerStatusMessage::BatteryChargeMessage(i, c))
             })),
             self.ac
                 .as_ref()
@@ -134,8 +154,6 @@ impl Status for PowerStatus {
     }
 
     fn render(&self) -> Element<'_, Self::Message, Theme, Renderer> {
-        let warning = 0.1;
-
         if self.ac.as_ref().map(|ac| ac.online).unwrap_or_default() {
             icon(Icon::BatteryCharging).into()
         } else {
@@ -143,7 +161,7 @@ impl Status for PowerStatus {
             let charge =
                 self.batteries.iter().map(|bat| (bat.capacity / total) * bat.charge).sum::<f64>();
 
-            if charge < warning {
+            if charge < self.config.critical {
                 icon(Icon::BatteryWarning).into()
             } else {
                 stack![
