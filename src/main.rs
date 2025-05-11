@@ -128,7 +128,7 @@ impl Liischte {
     fn update(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::Clock(msg) => self.clock.update(msg),
-            Message::Hyprland(msg) => self.hyprland.update(msg),
+            Message::Hyprland(msg) => return self.hyprland.update(msg).map(Message::Hyprland),
             Message::Status(msg) => {
                 trace!(
                     "passing status message {}",
@@ -159,10 +159,16 @@ impl Liischte {
         )
         .spacing(4);
 
-        column![self.hyprland.render(), vertical_space(), status, separator(), self.clock.render()]
-            .spacing(12)
-            .align_x(Horizontal::Center)
-            .width(Length::Fill)
-            .into()
+        column![
+            self.hyprland.render().map(Message::Hyprland),
+            vertical_space(),
+            status,
+            separator(),
+            self.clock.render()
+        ]
+        .spacing(12)
+        .align_x(Horizontal::Center)
+        .width(Length::Fill)
+        .into()
     }
 }

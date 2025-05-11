@@ -69,6 +69,7 @@ impl HyprlandInstance {
         .context("failed to deserialize output of `workspaces` hyprctl command")
     }
 
+    /// gets the state of the active workspace from socket 1
     pub async fn get_active_workspace(&self) -> Result<WorkspaceState> {
         serde_json::from_str(
             &self
@@ -77,6 +78,21 @@ impl HyprlandInstance {
                 .context("failed to run `activeworkspace` hyprctl command")?,
         )
         .context("failed to deserialize output of `activeworkspace` hyprctl command")
+    }
+
+    /// runs a dispatcher to select the workspace with the given id
+    pub async fn run_select_workspace(&self, id: i64) -> Result<()> {
+        self.dispatch_command(&format!("dispatch workspace {id}")).await.map(|_| ())
+    }
+
+    /// runs a dispatcher to select a workspace relatively given an offset
+    pub async fn run_select_workspace_relative(&self, offset: i64) -> Result<()> {
+        self.dispatch_command(&format!(
+            "dispatch workspace m{}{offset}",
+            if offset > 0 { "+" } else { "" }
+        ))
+        .await
+        .map(|_| ())
     }
 
     /// listens to socket 2 for all hyprland events and returns them as a stream
