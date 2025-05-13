@@ -13,6 +13,8 @@ use log::{debug, error, info};
 use serde::{Deserialize, Deserializer};
 use toml::Table;
 
+use crate::status::power::POWER_STATUS_IDENTIFIER;
+
 /// deserializes a color from a toml string
 fn deserialize_color<'de, D>(deserializer: D) -> Result<Color, D::Error>
 where
@@ -52,6 +54,9 @@ pub struct Config {
     pub hyprland: ConfigHyprland,
     pub clock: ConfigClock,
 
+    /// which status are enabled
+    pub statuses: Vec<String>,
+
     /// config for statuses
     status: HashMap<String, Table>,
 }
@@ -64,6 +69,7 @@ impl Default for Config {
             looks: ConfigLooks::default(),
             hyprland: ConfigHyprland::default(),
             clock: ConfigClock::default(),
+            statuses: vec![POWER_STATUS_IDENTIFIER.to_string()],
             status: HashMap::default(),
         }
     }
@@ -143,6 +149,9 @@ impl Default for ConfigLooks {
 #[derive(Deserialize)]
 #[serde(default)]
 pub struct ConfigHyprland {
+    /// enable hyprland workspace indicator
+    pub enabled: bool,
+
     /// monitor to show workspaces for
     pub monitor: u64,
     /// whether to show fullscreen status in bar
@@ -158,7 +167,14 @@ pub struct ConfigHyprland {
 
 impl Default for ConfigHyprland {
     fn default() -> Self {
-        Self { monitor: 0, fullscreen: true, size: 17f32, border: 1.5f32, rounding: 6f32 }
+        Self {
+            enabled: true,
+            monitor: 0,
+            fullscreen: true,
+            size: 17f32,
+            border: 1.5f32,
+            rounding: 6f32,
+        }
     }
 }
 

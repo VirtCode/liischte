@@ -1,5 +1,6 @@
 use std::hash::Hasher as _;
 
+use anyhow::{Context, Result};
 use futures::{StreamExt, stream};
 use iced::Task;
 use iced::mouse::ScrollDelta;
@@ -12,7 +13,7 @@ use iced::{
 use iced_winit::futures::BoxStream;
 use log::debug;
 
-use crate::config::CONFIG;
+use crate::config::{CONFIG, ConfigHyprland};
 use crate::info::{
     hyprland::{HyprlandInstance, WorkspaceState},
     util::StreamErrorLog,
@@ -27,6 +28,7 @@ pub enum HyprlandMessage {
 }
 
 pub struct Hyprland {
+    config: &'static ConfigHyprland,
     instance: HyprlandInstance,
 
     selected: i64,
@@ -34,20 +36,23 @@ pub struct Hyprland {
 }
 
 impl Hyprland {
-    pub fn new() -> Self {
-        Self { instance: HyprlandInstance::env().unwrap(), selected: 0, workspaces: vec![] }
-    }
+    pub async fn new() -> Result<Self> {
+        let config = &CONFIG.hyprland;
 
-    pub async fn initialize(&mut self) {
-        self.selected = self.instance.get_active_workspace().await.unwrap().id;
-        self.workspaces = self.instance.get_all_workspaces().await.unwrap();
+        let instance = HyprlandInstance::env().context(
+            "failed read environment for hyprland instance signature, are you running inside it?",
+        )?;
 
-        self.workspaces
-            .retain(|state| state.monitor_id == CONFIG.hyprland.monitor && state.id >= 0);
+        let selected = instance.get_active_workspace().await?.id;
+
+        let mut workspaces = instance.get_all_workspaces().await?;
+        workspaces.retain(|state| state.monitor_id == config.monitor && state.id >= 0);
+
+        Ok(Self { config, instance, selected, workspaces })
     }
 
     pub fn subscribe(&self) -> Subscription<HyprlandMessage> {
-        from_recipe(WorkspaceMonitor(self.instance.clone(), CONFIG.hyprland.monitor))
+        from_recipe(WorkspaceMonitor(self.instance.clone(), self.config.monitor))
             .map(|(selected, state)| HyprlandMessage::State(selected, state))
     }
 
@@ -85,19 +90,19 @@ impl Hyprland {
         state: &WorkspaceState,
     ) -> iced::Element<'_, HyprlandMessage, Theme, iced::Renderer> {
         let (background, border) = match (state.id == self.selected, state.window_amount > 0) {
-            (true, _) => (CONFIG.looks.semi, CONFIG.hyprland.border),
+            (true, _) => (CONFIG.looks.semi, self.config.border),
             (false, true) => (CONFIG.looks.foreground, 0f32),
-            _ => (Color::TRANSPARENT, CONFIG.hyprland.border),
+            _ => (Color::TRANSPARENT, self.config.border),
         };
 
-        let radius = if state.fullscreen && CONFIG.hyprland.fullscreen {
+        let radius = if state.fullscreen && self.config.fullscreen {
             3f32 // this is almost no rounding, just for asthetics
         } else {
-            CONFIG.hyprland.rounding
+            self.config.rounding
         };
 
-        mouse_area(container(Space::new(CONFIG.hyprland.size, CONFIG.hyprland.size)).style(
-            move |_| Style {
+        mouse_area(container(Space::new(self.config.size, self.config.size)).style(move |_| {
+            Style {
                 background: Some(Background::Color(background)),
                 border: Border {
                     color: CONFIG.looks.foreground,
@@ -105,8 +110,8 @@ impl Hyprland {
                     radius: Radius::new(radius),
                 },
                 ..Default::default()
-            },
-        ))
+            }
+        }))
         .on_release(HyprlandMessage::SelectAbsolute(state.id))
         .into()
     }
@@ -120,7 +125,7 @@ impl Hyprland {
         )
         .on_scroll(|event| {
             if let ScrollDelta::Pixels { y, .. } = event {
-                HyprlandMessage::SelectRelative(if y > 0f32 { 1 } else { -1 })
+                HyprlandMessage::SelectRelative(if y > 0f32 { -1 } else { 1 })
             } else {
                 HyprlandMessage::Ok
             }

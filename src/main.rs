@@ -11,7 +11,7 @@ use hyprland::{Hyprland, HyprlandMessage};
 use iced::{
     Color, Font, Length, Limits, Subscription, Task, Theme,
     alignment::Horizontal,
-    application,
+    application, color,
     runtime::platform_specific::wayland::layer_surface::{
         IcedMargin, IcedOutput, SctkLayerSurfaceSettings,
     },
@@ -24,7 +24,10 @@ use iced_winit::commands::{
 };
 use log::{info, trace};
 use lucide_icons::lucide_font_bytes;
-use status::{AbstractStatus, Status, StatusMessage, power::PowerStatus};
+use status::{
+    AbstractStatus, Status, StatusMessage,
+    power::{POWER_STATUS_IDENTIFIER, PowerStatus},
+};
 use ui::{separator, window::layer_window};
 
 mod clock;
@@ -59,10 +62,16 @@ async fn main() -> iced::Result {
 
     let mut liischte = Liischte::new();
 
-    // add statusses
-    liischte.add_status(Box::new(PowerStatus::new()));
+    if CONFIG.hyprland.enabled {
+        liischte.set_hyprland(Hyprland::new().await.unwrap());
+    }
 
-    liischte.initialize().await;
+    for status in &CONFIG.statuses {
+        liischte.add_status(match status.as_str() {
+            POWER_STATUS_IDENTIFIER => Box::new(PowerStatus::new().await.unwrap()),
+            status => panic!("status `{status}` does not exist in this version"),
+        });
+    }
 
     // run iced app with surface
     app.run_with(move || {
@@ -102,51 +111,51 @@ enum Message {
 
 struct Liischte {
     clock: Clock,
-    hyprland: Hyprland,
+    hyprland: Option<Hyprland>,
     status: HashMap<TypeId, Box<dyn AbstractStatus>>,
 }
 
 impl Liischte {
     pub fn new() -> Self {
-        Self { status: HashMap::new(), clock: Clock::new(), hyprland: Hyprland::new() }
+        Self { status: HashMap::new(), clock: Clock::new(), hyprland: None }
     }
 
-    pub async fn initialize(&mut self) {
-        info!("initializing all widgets");
-
-        self.hyprland.initialize().await;
-
-        for status in self.status.values_mut() {
-            status.initialize().await
-        }
+    /// set the hyprland instance
+    pub fn set_hyprland(&mut self, hyprland: Hyprland) {
+        self.hyprland = Some(hyprland);
     }
 
+    /// add a status to the bar
     pub fn add_status(&mut self, status: Box<dyn AbstractStatus>) {
         self.status.insert(status.message_type(), status);
     }
 
     fn update(&mut self, message: Message) -> Task<Message> {
         match message {
-            Message::Clock(msg) => self.clock.update(msg),
-            Message::Hyprland(msg) => return self.hyprland.update(msg).map(Message::Hyprland),
-            Message::Status(msg) => {
-                trace!(
-                    "passing status message {}",
-                    (*msg).type_name().rsplit("::").next().unwrap_or_default()
-                );
+            Message::Clock(msg) => self.clock.update(msg).map(Message::Clock),
 
-                self.status.get_mut(&(*msg).type_id()).expect("wth").update(msg)
-            }
+            Message::Hyprland(msg) => self
+                .hyprland
+                .as_mut()
+                .map(|hl| hl.update(msg).map(Message::Hyprland))
+                .unwrap_or(Task::none()),
+
+            Message::Status(msg) => self
+                .status
+                .get_mut(&(*msg).type_id())
+                .expect("received status message for non-existent status")
+                .update(msg)
+                .map(Message::Status),
         }
-
-        Task::none()
     }
 
     fn subscription(&self) -> Subscription<Message> {
         Subscription::batch(vec![
             self.clock.subscribe().map(Message::Clock),
-            self.hyprland.subscribe().map(Message::Hyprland),
-            // messages for status
+            self.hyprland
+                .as_ref()
+                .map(|hl| hl.subscribe().map(Message::Hyprland))
+                .unwrap_or(Subscription::none()),
             Subscription::batch(
                 self.status.values().map(|status| status.subscribe().map(Message::Status)),
             ),
@@ -154,17 +163,18 @@ impl Liischte {
     }
 
     fn view(&self, _: SurfaceId) -> iced::Element<'_, Message, Theme, iced::Renderer> {
-        let status = Column::from_iter(
-            self.status.values().map(|status| status.render().map(Message::Status)),
-        )
-        .spacing(4);
-
         column![
-            self.hyprland.render().map(Message::Hyprland),
+            self.hyprland
+                .as_ref()
+                .map(|hl| hl.render().map(Message::Hyprland))
+                .unwrap_or_else(|| column![].into()),
             vertical_space(),
-            status,
+            Column::from_iter(
+                self.status.values().map(|status| status.render().map(Message::Status)),
+            )
+            .spacing(4),
             separator(),
-            self.clock.render()
+            self.clock.render().map(Message::Clock)
         ]
         .spacing(12)
         .align_x(Horizontal::Center)

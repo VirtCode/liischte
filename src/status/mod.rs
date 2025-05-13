@@ -3,7 +3,8 @@ use std::{any::TypeId, fmt::Debug};
 use async_trait::async_trait;
 use downcast::{Any, Downcast, downcast};
 use dyn_clone::{DynClone, clone_trait_object};
-use iced::{Element, Renderer, Subscription, Theme};
+use iced::{Element, Renderer, Subscription, Task, Theme};
+use log::trace;
 
 pub mod power;
 
@@ -18,15 +19,12 @@ downcast!(dyn StatusMessage);
 pub trait Status: Send {
     type Message: StatusMessage;
 
-    /// initialize the status by setting up required resources and handlers
-    async fn initialize(&mut self);
-
     /// the iced subscribe method which returns subscriptions
     fn subscribe(&self) -> Subscription<Self::Message>;
 
     /// the iced update method which mutates the state based on messages
     /// received
-    fn update(&mut self, message: &Self::Message);
+    fn update(&mut self, message: &Self::Message) -> Task<Self::Message>;
 
     /// the iced render method, which renders the status based on internal state
     fn render(&self) -> Element<'_, Self::Message, Theme, Renderer>;
@@ -40,11 +38,9 @@ pub trait Status: Send {
 pub trait AbstractStatus: Send {
     fn message_type(&self) -> TypeId;
 
-    async fn initialize(&mut self);
-
     fn subscribe(&self) -> Subscription<Box<dyn StatusMessage>>;
 
-    fn update(&mut self, message: Box<dyn StatusMessage>);
+    fn update(&mut self, message: Box<dyn StatusMessage>) -> Task<Box<dyn StatusMessage>>;
 
     fn render(&self) -> Element<'_, Box<dyn StatusMessage>, Theme, Renderer>;
 }
@@ -55,20 +51,21 @@ impl<T: Status> AbstractStatus for T {
         TypeId::of::<<T as Status>::Message>()
     }
 
-    async fn initialize(&mut self) {
-        Status::initialize(self).await
-    }
-
     fn subscribe(&self) -> Subscription<Box<dyn StatusMessage>> {
         Status::subscribe(self).map(|msg| -> Box<dyn StatusMessage> { Box::new(msg) })
     }
 
-    fn update(&mut self, message: Box<dyn StatusMessage>) {
+    fn update(&mut self, message: Box<dyn StatusMessage>) -> Task<Box<dyn StatusMessage>> {
+        trace!(
+            "passing status message for {}",
+            std::any::type_name_of_val(self).rsplit("::").next().unwrap_or_default()
+        );
+
         let Ok(heap) = message
             .downcast::<<T as Status>::Message>()
             .map_err(|e| panic!("received invalid type for status message: {e:#}"));
 
-        Status::update(self, &heap)
+        Status::update(self, &heap).map(|msg| -> Box<dyn StatusMessage> { Box::new(msg) })
     }
 
     fn render(&self) -> Element<'_, Box<dyn StatusMessage>, Theme, Renderer> {

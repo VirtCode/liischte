@@ -1,9 +1,10 @@
 use std::{hash::Hasher, time::Duration};
 
+use anyhow::{Context, Result};
 use async_trait::async_trait;
 use futures::{FutureExt, StreamExt, stream};
 use iced::{
-    Background, Color, Element, Length, Renderer, Subscription, Theme,
+    Background, Color, Element, Length, Renderer, Subscription, Task, Theme,
     advanced::subscription::{EventStream, Recipe, from_recipe},
     widget::{Space, container, stack},
 };
@@ -22,6 +23,8 @@ use crate::{
 };
 
 use super::{Status, StatusMessage};
+
+pub const POWER_STATUS_IDENTIFIER: &str = "power";
 
 #[derive(Deserialize)]
 #[serde(default)]
@@ -77,31 +80,26 @@ pub struct PowerStatus {
 }
 
 impl PowerStatus {
-    pub fn new() -> Self {
-        Self { ac: None, batteries: vec![], config: CONFIG.status("power") }
-    }
-}
+    pub async fn new() -> Result<Self> {
+        let config: PowerStatusConfig = CONFIG.status(POWER_STATUS_IDENTIFIER);
 
-#[async_trait]
-impl Status for PowerStatus {
-    type Message = PowerStatusMessage;
-
-    async fn initialize(&mut self) {
         info!("reading available power devices from sysfs");
+        let mut ac = None;
+        let mut batteries = vec![];
 
-        for device in read_devices().await.unwrap() {
+        for device in read_devices().await.context("failed to read power devices")? {
             debug!("checking power device with name '{}'", &device.name);
 
-            if self.config.ac.as_ref().map(|ac| *ac == device.name).unwrap_or_default()
-                || (self.config.ac.is_none() && self.ac.is_none() && device.name.starts_with("AC"))
+            if config.ac.as_ref() == Some(&device.name)
+                || config.ac.is_none() && ac.is_none() && device.name.starts_with("AC")
             {
-                self.ac = Some(Ac { online: read_ac_online(&device).await.unwrap(), device })
-            } else if self.config.batteries.iter().any(|bat| *bat == device.name)
-                || (self.config.batteries.is_empty() && device.name.starts_with("BAT"))
+                ac = Some(Ac { online: read_ac_online(&device).await?, device })
+            } else if config.batteries.contains(&device.name)
+                || (config.batteries.is_empty() && device.name.starts_with("BAT"))
             {
-                self.batteries.push(Battery {
-                    capacity: read_battery_capacity(&device).await.unwrap(),
-                    charge: read_battery_charge(&device).await.unwrap(),
+                batteries.push(Battery {
+                    capacity: read_battery_capacity(&device).await?,
+                    charge: read_battery_charge(&device).await?,
                     device,
                 });
             }
@@ -109,14 +107,17 @@ impl Status for PowerStatus {
 
         info!(
             "using ac {} and batteries [{}]",
-            self.ac.as_ref().map(|ac| ac.device.name.as_str()).unwrap_or("<none>"),
-            self.batteries
-                .iter()
-                .map(|bat| bat.device.name.as_str())
-                .collect::<Vec<_>>()
-                .join(", ")
+            ac.as_ref().map(|ac| ac.device.name.as_str()).unwrap_or("<none>"),
+            batteries.iter().map(|bat| bat.device.name.as_str()).collect::<Vec<_>>().join(", ")
         );
+
+        Ok(Self { ac, batteries, config })
     }
+}
+
+#[async_trait]
+impl Status for PowerStatus {
+    type Message = PowerStatusMessage;
 
     fn subscribe(&self) -> Subscription<Self::Message> {
         Subscription::batch(vec![
@@ -138,7 +139,7 @@ impl Status for PowerStatus {
         ])
     }
 
-    fn update(&mut self, message: &Self::Message) {
+    fn update(&mut self, message: &Self::Message) -> Task<Self::Message> {
         match message {
             PowerStatusMessage::AcOnlineMessage(online) => {
                 if let Some(ac) = &mut self.ac {
@@ -151,6 +152,8 @@ impl Status for PowerStatus {
                 }
             }
         }
+
+        Task::none()
     }
 
     fn render(&self) -> Element<'_, Self::Message, Theme, Renderer> {
