@@ -9,18 +9,15 @@ use iced::{
     widget::{Space, container, stack},
 };
 use iced_winit::futures::BoxStream;
+use liischte_lib::power::{
+    PowerDevice, listen_ac_online, listen_battery_charge, read_ac_online, read_battery_capacity,
+    read_battery_charge, read_devices,
+};
 use log::{debug, error, info};
 use lucide_icons::Icon;
 use serde::Deserialize;
 
-use crate::{
-    config::CONFIG,
-    info::power::{
-        PowerDevice, listen_ac_online, listen_battery_charge, read_ac_online,
-        read_battery_capacity, read_battery_charge, read_devices,
-    },
-    ui::icon,
-};
+use crate::{config::CONFIG, ui::icon};
 
 use super::{Status, StatusMessage};
 

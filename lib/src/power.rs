@@ -7,7 +7,9 @@ use tokio::{fs, time::Instant};
 use tokio_stream::wrappers::ReadDirStream;
 use udev::MonitorBuilder;
 
-use super::util::{StaticStream, StreamErrorLog, udev::AsyncMonitorSocket};
+use crate::{StaticStream, StreamErrorLog};
+
+use super::util::udev::AsyncMonitorSocket;
 
 ///! Implementation of power information using events from udev and the
 ///! power_supply sysfs

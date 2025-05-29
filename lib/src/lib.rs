@@ -1,10 +1,12 @@
 use anyhow::Result;
-use futures::{Stream, stream::BoxStream};
+use futures::stream::BoxStream;
 use log::warn;
-use scan::ScanOwning;
 
-pub mod scan;
-pub mod udev;
+#[cfg(feature = "hyprland")]
+pub mod hyprland;
+#[cfg(feature = "power")]
+pub mod power;
+mod util;
 
 /// a boxed stream with a static lifetime
 pub type StaticStream<T> = BoxStream<'static, T>;
@@ -24,18 +26,5 @@ impl<T> StreamErrorLog<T> for Result<T> {
                 None
             }
         }
-    }
-}
-
-impl<T: ?Sized> StreamCustomExt for T where T: Stream {}
-
-pub trait StreamCustomExt: Stream {
-    fn scan_owning<S, B, Fut, F>(self, initial_state: S, f: F) -> ScanOwning<Self, S, Fut, F>
-    where
-        F: FnMut(S, Self::Item) -> Fut,
-        Fut: Future<Output = Option<(S, B)>>,
-        Self: Sized,
-    {
-        ScanOwning::new(self, initial_state, f)
     }
 }

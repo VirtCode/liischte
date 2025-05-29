@@ -4,15 +4,13 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+liischte-lib = { path = "lib" }
+
 chrono = "0.4.40"
 anyhow = "*"
 
-tokio = { version = "1.44.1", features = ["rt-multi-thread", "macros", "net", "io-util", "fs"] }
-tokio-stream = { version = "0.1.17", features = ["fs", "io-util"] }
+tokio = { version = "1.44.1", features = ["rt-multi-thread", "macros"] }
 futures = "0.3.31"
-futures-util = "0.3.31"
-futures-core = "0.3.31"
-pin-project-lite = "0.2.16"
 
 # we use cosmic's iced fork
 iced = { git = "https://github.com/pop-os/iced", rev = "3766ae5c9e8327ebcb5f3110694810b6bc263049", features = ["advanced", "tokio", "winit", "wayland", "multi-window"] }
@@ -22,13 +20,9 @@ log = "0.4.27"
 env_logger = "0.11.7"
 
 serde = { version = "1.0.219", features = ["derive"] }
-serde_json = "1.0.140"
 toml = "0.8.22"
 
 lucide-icons = "0.507.0"
-
-# battery integration
-udev = { version = "0.9.3", features = ["send"] }
 
 # stuff used for abstraction
 downcast = "0.11.0"

@@ -11,13 +11,11 @@ use iced::{
     widget::{Space, container::Style},
 };
 use iced_winit::futures::BoxStream;
+use liischte_lib::StreamErrorLog;
+use liischte_lib::hyprland::{HyprlandInstance, WorkspaceState};
 use log::debug;
 
 use crate::config::{CONFIG, ConfigHyprland};
-use crate::info::{
-    hyprland::{HyprlandInstance, WorkspaceState},
-    util::StreamErrorLog,
-};
 
 #[derive(Debug, Clone)]
 pub enum HyprlandMessage {

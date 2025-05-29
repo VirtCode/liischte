@@ -31,11 +31,6 @@ impl<T, Fut> UnfoldState<T, Fut> {
     pub(crate) fn is_empty(&self) -> bool {
         matches!(self, Self::Empty)
     }
-
-    pub(crate) fn is_future(&self) -> bool {
-        matches!(self, Self::Future { .. })
-    }
-
     pub(crate) fn project_future(self: Pin<&mut Self>) -> Option<Pin<&mut Fut>> {
         match self.project() {
             UnfoldStateProj::Future { future } => Some(future),

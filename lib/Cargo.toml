@@ -1,0 +1,30 @@
+[package]
+name = "liischte-lib"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+# we use a lot of async
+tokio = { version = "1.44.1", features = ["net", "fs", "io-util"] }
+tokio-stream = { version = "0.1.17", features = ["fs", "io-util"] }
+
+futures = "0.3.31"
+
+# we might need to deserialize stuff
+serde = { version = "1.0.219", features = ["derive"] }
+serde_json = "1.0.140"
+
+# logging and error handling
+anyhow = "1.0.98"
+log = "0.4.27"
+futures-core = "0.3.31"
+pin-project-lite = "0.2.16"
+
+# power feature
+udev = { version = "0.9.3", features = ["send"], optional = true }
+
+[features]
+hyprland = []
+power = ["dep:udev"]
+
+default = ["hyprland", "power"]

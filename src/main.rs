@@ -35,7 +35,6 @@ mod hyprland;
 mod status;
 
 pub mod config;
-pub mod info;
 mod ui;
 
 #[tokio::main]
