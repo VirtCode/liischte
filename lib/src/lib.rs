@@ -4,6 +4,8 @@ use log::warn;
 
 #[cfg(feature = "hyprland")]
 pub mod hyprland;
+#[cfg(feature = "pipewire")]
+pub mod pipewire;
 #[cfg(feature = "power")]
 pub mod power;
 mod util;
