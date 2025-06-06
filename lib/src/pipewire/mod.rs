@@ -104,6 +104,11 @@ impl PipewireInstance {
         self.send_command(PipewireAction::NodeMute(name.to_string(), mute))
     }
 
+    /// triggers a manual update to be sent thorugh every listening channel
+    pub fn trigger_update(&self) -> Result<()> {
+        self.send_command(PipewireAction::Update)
+    }
+
     /// sends a command through the channel to the thread
     fn send_command(&self, command: PipewireAction) -> Result<()> {
         self.actions
@@ -119,6 +124,7 @@ enum PipewireAction {
     DefaultSource(String),
     NodeVolume(String, Vec<f32>),
     NodeMute(String, bool),
+    Update, // sends an update through every channel
 }
 
 struct PipewireThread {
@@ -215,6 +221,11 @@ impl PipewireThread {
             PipewireAction::DefaultSource(name) => self.default.set_source(Some(&name)),
             PipewireAction::NodeVolume(name, volume) => self.nodes.set_volume(&name, volume),
             PipewireAction::NodeMute(name, mute) => self.nodes.set_mute(&name, mute),
+
+            PipewireAction::Update => {
+                self.default.trigger_update();
+                self.nodes.trigger_update();
+            }
         }
     }
 }

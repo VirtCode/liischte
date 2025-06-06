@@ -78,6 +78,13 @@ impl DefaultTracker {
     pub fn set_source(&self, source: Option<&str>) {
         self.set_default("default.configured.audio.source", source);
     }
+
+    /// triggers a manual update in the channel
+    pub fn trigger_update(&self) {
+        if self.updates.send(self.state.borrow().clone()).is_err() {
+            warn!("failed to send triggered update to channel");
+        }
+    }
 }
 
 const DEFAULT_STATE_UNKNOWN: &str = "unknown";

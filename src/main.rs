@@ -26,6 +26,7 @@ use log::{info, trace};
 use lucide_icons::lucide_font_bytes;
 use status::{
     AbstractStatus, Status, StatusMessage,
+    audio::{AUDIO_STATUS_IDENTIFIER, AudioStatus},
     power::{POWER_STATUS_IDENTIFIER, PowerStatus},
 };
 use ui::{separator, window::layer_window};
@@ -68,6 +69,7 @@ async fn main() -> iced::Result {
     for status in &CONFIG.statuses {
         liischte.add_status(match status.as_str() {
             POWER_STATUS_IDENTIFIER => Box::new(PowerStatus::new().await.unwrap()),
+            AUDIO_STATUS_IDENTIFIER => Box::new(AudioStatus::new()),
             status => panic!("status `{status}` does not exist in this version"),
         });
     }

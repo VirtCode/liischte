@@ -33,14 +33,14 @@ struct NodeTrackerObject {
 #[derive(Clone, Debug)]
 pub struct NodeState {
     /// name of the node
-    name: String,
+    pub name: String,
     /// description (human readable name) of the node
-    description: String,
+    pub description: String,
 
     /// whether the node is muted
-    mute: bool,
+    pub mute: bool,
     /// current volume of each channel
-    volume: Vec<f32>,
+    pub volume: Vec<f32>,
 }
 
 impl NodeState {
@@ -245,7 +245,7 @@ impl NodeTracker {
     pub fn set_volume(&self, name: &str, mut volume: Vec<f32>) {
         // we assume the volume is in "visual" form, i.e. not linear like what pw tracks
         for ele in &mut volume {
-            *ele = ele.powi(3); // the cube root seems what everyone uses
+            *ele = ele.max(0f32).powi(3); // the cube root seems what everyone uses
         }
 
         self.set(
@@ -298,5 +298,11 @@ impl NodeTracker {
         };
 
         node.proxy.set_param(ParamType::Props, 0, pod);
+    }
+
+    /// triggers a manual update in the channel
+    pub fn trigger_update(&self) {
+        self.update(NodeClass::Sink);
+        self.update(NodeClass::Source);
     }
 }
