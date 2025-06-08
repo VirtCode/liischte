@@ -1,17 +1,13 @@
 #![feature(hasher_prefixfree_extras)]
-use std::{
-    any::{Any, TypeId},
-    collections::HashMap,
-};
+use std::{any::TypeId, collections::HashMap};
 
 use clock::{Clock, ClockMessage};
 use config::CONFIG;
-use futures::StreamExt;
 use hyprland::{Hyprland, HyprlandMessage};
 use iced::{
     Color, Font, Length, Limits, Subscription, Task, Theme,
     alignment::Horizontal,
-    application, color,
+    application,
     runtime::platform_specific::wayland::layer_surface::{
         IcedMargin, IcedOutput, SctkLayerSurfaceSettings,
     },
@@ -22,14 +18,15 @@ use iced_winit::commands::{
     layer_surface::get_layer_surface,
     subsurface::{Anchor, Layer},
 };
-use log::{info, trace};
 use lucide_icons::lucide_font_bytes;
 use status::{
-    AbstractStatus, Status, StatusMessage,
+    AbstractStatus, StatusMessage,
     audio::{AUDIO_STATUS_IDENTIFIER, AudioStatus},
     power::{POWER_STATUS_IDENTIFIER, PowerStatus},
 };
 use ui::{separator, window::layer_window};
+
+use crate::status::network::{NETWORK_STATUS_IDENTIFIER, NetworkStatus};
 
 mod clock;
 mod hyprland;
@@ -69,6 +66,7 @@ async fn main() -> iced::Result {
     for status in &CONFIG.statuses {
         liischte.add_status(match status.as_str() {
             POWER_STATUS_IDENTIFIER => Box::new(PowerStatus::new().await.unwrap()),
+            NETWORK_STATUS_IDENTIFIER => Box::new(NetworkStatus::new().await),
             AUDIO_STATUS_IDENTIFIER => Box::new(AudioStatus::new()),
             status => panic!("status `{status}` does not exist in this version"),
         });

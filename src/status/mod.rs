@@ -7,6 +7,7 @@ use iced::{Element, Renderer, Subscription, Task, Theme};
 use log::trace;
 
 pub mod audio;
+pub mod network;
 pub mod power;
 
 /// this trait makes sure downcasting works for the message of the custom status

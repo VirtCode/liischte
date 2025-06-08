@@ -26,9 +26,14 @@ udev = { version = "0.9.3", features = ["send"], optional = true }
 # pipewire feature
 pipewire = { git = "https://gitlab.freedesktop.org/pipewire/pipewire-rs", optional = true }
 
+# network manager
+zbus = { version = "5.7.1", default-features = false, features = ["tokio"], optional = true }
+rusty_network_manager = { git = "https://github.com/flukejones/network_manager", optional = true, default-features = false, features = ["access_point", "active", "wireless"] }
+
 [features]
 hyprland = []
 power = ["dep:udev"]
 pipewire = ["dep:pipewire"]
+networkmanager = ["dep:zbus", "dep:rusty_network_manager"]
 
-default = ["hyprland", "power", "pipewire"]
+default = ["hyprland", "power", "pipewire", "networkmanager"]

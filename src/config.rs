@@ -13,7 +13,10 @@ use log::{debug, error, info};
 use serde::{Deserialize, Deserializer};
 use toml::Table;
 
-use crate::status::{audio::AUDIO_STATUS_IDENTIFIER, power::POWER_STATUS_IDENTIFIER};
+use crate::status::{
+    audio::AUDIO_STATUS_IDENTIFIER, network::NETWORK_STATUS_IDENTIFIER,
+    power::POWER_STATUS_IDENTIFIER,
+};
 
 /// deserializes a color from a toml string
 fn deserialize_color<'de, D>(deserializer: D) -> Result<Color, D::Error>
@@ -72,6 +75,7 @@ impl Default for Config {
             statuses: vec![
                 POWER_STATUS_IDENTIFIER.to_string(),
                 AUDIO_STATUS_IDENTIFIER.to_string(),
+                NETWORK_STATUS_IDENTIFIER.to_string(),
             ],
             status: HashMap::default(),
         }
