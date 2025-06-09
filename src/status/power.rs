@@ -9,10 +9,7 @@ use iced::{
     widget::{Space, container, stack},
 };
 use iced_winit::futures::BoxStream;
-use liischte_lib::power::{
-    PowerDevice, listen_ac_online, listen_battery_charge, read_ac_online, read_battery_capacity,
-    read_battery_charge, read_devices,
-};
+use liischte_lib::power::{BatteryPowerDevice, MainsPowerDevice, PowerDevice, PowerDeviceKind};
 use log::{debug, error, info};
 use lucide_icons::Icon;
 use serde::Deserialize;
@@ -26,8 +23,8 @@ pub const POWER_STATUS_IDENTIFIER: &str = "power";
 #[derive(Deserialize)]
 #[serde(default)]
 struct PowerStatusConfig {
-    /// force the use of a specific ac adapter
-    ac: Option<String>,
+    /// force the use of a specific mains supply
+    mains: Option<String>,
     /// force the use of a specific set of batteries
     batteries: Vec<String>,
 
@@ -40,39 +37,32 @@ struct PowerStatusConfig {
 
 impl Default for PowerStatusConfig {
     fn default() -> Self {
-        Self { ac: None, batteries: vec![], polling_rate: 30, critical: 0.1 }
+        Self { mains: None, batteries: vec![], polling_rate: 30, critical: 0.1 }
     }
 }
 
 impl StatusMessage for PowerStatusMessage {}
 #[derive(Clone, Debug)]
 pub enum PowerStatusMessage {
-    AcOnlineMessage(bool),
+    MainsOnlineMessage(bool),
     BatteryChargeMessage(usize, f64),
 }
 
-struct Ac {
-    device: PowerDevice,
-
-    /// is the ac adapter providing power
+struct Mains {
+    device: MainsPowerDevice,
     online: bool,
 }
 
 struct Battery {
-    device: PowerDevice,
-
-    /// capacity the batter has in Wh
+    device: BatteryPowerDevice,
     capacity: f64,
-    /// current charge of the battery from 0 to 1
     charge: f64,
 }
 
 pub struct PowerStatus {
     config: PowerStatusConfig,
 
-    /// tracked ac adapter
-    ac: Option<Ac>,
-    /// batteries which are considered
+    mains: Option<Mains>,
     batteries: Vec<Battery>,
 }
 
@@ -81,34 +71,44 @@ impl PowerStatus {
         let config: PowerStatusConfig = CONFIG.status(POWER_STATUS_IDENTIFIER);
 
         info!("reading available power devices from sysfs");
-        let mut ac = None;
+        let mut mains = None;
         let mut batteries = vec![];
 
-        for device in read_devices().await.context("failed to read power devices")? {
-            debug!("checking power device with name '{}'", &device.name);
+        for device in PowerDevice::read_all().await.context("failed to read power devices")? {
+            debug!("checking power device with name `{}` ({:?})", device.name, device.kind);
 
-            if config.ac.as_ref() == Some(&device.name)
-                || config.ac.is_none() && ac.is_none() && device.name.starts_with("AC")
-            {
-                ac = Some(Ac { online: read_ac_online(&device).await?, device })
-            } else if config.batteries.contains(&device.name)
-                || (config.batteries.is_empty() && device.name.starts_with("BAT"))
-            {
-                batteries.push(Battery {
-                    capacity: read_battery_capacity(&device).await?,
-                    charge: read_battery_charge(&device).await?,
-                    device,
-                });
+            match device.kind {
+                PowerDeviceKind::Mains => {
+                    let device = MainsPowerDevice(device);
+
+                    if mains.is_none()
+                        && (config.mains.as_ref() == Some(&device.0.name) || config.mains.is_none())
+                    {
+                        mains = Some(Mains { online: device.read_online().await?, device })
+                    }
+                }
+                PowerDeviceKind::Battery => {
+                    let device = BatteryPowerDevice(device);
+
+                    if config.batteries.is_empty() || config.batteries.contains(&device.0.name) {
+                        batteries.push(Battery {
+                            capacity: device.read_capacity().await?,
+                            charge: device.read_charge().await?,
+                            device,
+                        });
+                    }
+                }
+                _ => {}
             }
         }
 
         info!(
             "using ac {} and batteries [{}]",
-            ac.as_ref().map(|ac| ac.device.name.as_str()).unwrap_or("<none>"),
-            batteries.iter().map(|bat| bat.device.name.as_str()).collect::<Vec<_>>().join(", ")
+            mains.as_ref().map(|ac| ac.device.0.name.as_str()).unwrap_or("<none>"),
+            batteries.iter().map(|bat| bat.device.0.name.as_str()).collect::<Vec<_>>().join(", ")
         );
 
-        Ok(Self { ac, batteries, config })
+        Ok(Self { mains, batteries, config })
     }
 }
 
@@ -126,11 +126,11 @@ impl Status for PowerStatus {
                 .with(i)
                 .map(|(i, c)| PowerStatusMessage::BatteryChargeMessage(i, c))
             })),
-            self.ac
+            self.mains
                 .as_ref()
                 .map(|ac| {
                     from_recipe(OnlineMonitor(ac.device.clone()))
-                        .map(PowerStatusMessage::AcOnlineMessage)
+                        .map(PowerStatusMessage::MainsOnlineMessage)
                 })
                 .unwrap_or_else(Subscription::none),
         ])
@@ -138,8 +138,8 @@ impl Status for PowerStatus {
 
     fn update(&mut self, message: &Self::Message) -> Task<Self::Message> {
         match message {
-            PowerStatusMessage::AcOnlineMessage(online) => {
-                if let Some(ac) = &mut self.ac {
+            PowerStatusMessage::MainsOnlineMessage(online) => {
+                if let Some(ac) = &mut self.mains {
                     ac.online = *online;
                 }
             }
@@ -154,7 +154,7 @@ impl Status for PowerStatus {
     }
 
     fn render(&self) -> Element<'_, Self::Message, Theme, Renderer> {
-        if self.ac.as_ref().map(|ac| ac.online).unwrap_or_default() {
+        if self.mains.as_ref().map(|ac| ac.online).unwrap_or_default() {
             icon(Icon::BatteryCharging).into()
         } else {
             let total = self.batteries.iter().map(|bat| bat.capacity).sum::<f64>();
@@ -180,19 +180,19 @@ impl Status for PowerStatus {
     }
 }
 
-struct OnlineMonitor(PowerDevice);
+struct OnlineMonitor(MainsPowerDevice);
 
 impl Recipe for OnlineMonitor {
     type Output = bool;
 
     fn hash(&self, state: &mut iced::advanced::subscription::Hasher) {
-        state.write_str(&format!("ac online events for {}", self.0.name));
+        state.write_str(&format!("ac online events for {}", self.0.0.name));
     }
 
     fn stream(self: Box<Self>, _input: EventStream) -> BoxStream<Self::Output> {
-        debug!("staring ac online listener for {}", self.0.name);
+        debug!("staring mains online listener for {}", self.0.0.name);
 
-        match listen_ac_online(self.0) {
+        match self.0.listen_online() {
             Ok(s) => s,
             Err(e) => {
                 error!("failed to start ac listening: {e:#}");
@@ -202,17 +202,17 @@ impl Recipe for OnlineMonitor {
     }
 }
 
-struct ChargeMonitor(PowerDevice, Duration);
+struct ChargeMonitor(BatteryPowerDevice, Duration);
 
 impl Recipe for ChargeMonitor {
     type Output = f64;
 
     fn hash(&self, state: &mut iced::advanced::subscription::Hasher) {
-        state.write_str(&format!("battery charge events for {}", self.0.name));
+        state.write_str(&format!("battery charge events for {}", self.0.0.name));
     }
 
     fn stream(self: Box<Self>, _input: EventStream) -> BoxStream<Self::Output> {
-        debug!("starting battery charge listener for {}", self.0.name);
-        listen_battery_charge(self.0, self.1)
+        debug!("starting battery charge listener for {}", self.0.0.name);
+        self.0.listen_charge(self.1)
     }
 }
