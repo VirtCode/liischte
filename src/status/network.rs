@@ -1,5 +1,6 @@
 use std::hash::Hasher as _;
 
+use anyhow::{Context, Result};
 use futures::{StreamExt, stream};
 use iced::{
     Element, Renderer, Subscription, Task, Theme,
@@ -7,9 +8,9 @@ use iced::{
 };
 use iced_winit::futures::BoxStream;
 use liischte_lib::networkmanager::{
-    ActiveConnection, ActiveConnectionKind, NetworkManager, NetworkObject, describe_path,
+    ActiveConnection, ActiveConnectionKind, NetworkManager, OwnedObjectPath, describe_path,
 };
-use log::{debug, error, trace};
+use log::{debug, trace};
 use lucide_icons::Icon;
 use serde::Deserialize;
 
@@ -31,7 +32,7 @@ struct NetworkStatusConfig {
 impl StatusMessage for NetworkMessage {}
 #[derive(Clone, Debug)]
 pub enum NetworkMessage {
-    PrimaryConnection(Option<NetworkObject>),
+    PrimaryConnection(Option<OwnedObjectPath>),
     ActiveConnections(Vec<ActiveConnection>),
 
     WirelessStrength(f64),
@@ -45,23 +46,25 @@ pub struct NetworkStatus {
     active: Vec<ActiveConnection>,
 
     primary: Option<ActiveConnection>,
-    primary_path: Option<NetworkObject>, /* we need this if the primary is communicated before
-                                          * the active */
+    primary_path: Option<OwnedObjectPath>, /* we need this if the primary is communicated before
+                                            * the active */
     wireless_strength: f64,
     cellular_strength: f64,
 }
 
 impl NetworkStatus {
-    pub async fn new() -> Self {
-        Self {
+    pub async fn new() -> Result<Self> {
+        Ok(Self {
             config: CONFIG.status(NETWORK_STATUS_IDENTIFIER),
-            nm: NetworkManager::connnect().await.unwrap(),
+            nm: NetworkManager::connnect().await.context("could not connect to system bus")?,
+
             active: vec![],
             primary: None,
             primary_path: None,
+
             wireless_strength: 1f64,
             cellular_strength: 1f64,
-        }
+        })
     }
 }
 
@@ -157,7 +160,7 @@ impl Status for NetworkStatus {
 struct PrimaryMonitor(NetworkManager);
 
 impl Recipe for PrimaryMonitor {
-    type Output = Option<NetworkObject>;
+    type Output = Option<OwnedObjectPath>;
 
     fn hash(&self, state: &mut Hasher) {
         state.write_str("network primary connection events");
@@ -186,7 +189,7 @@ impl Recipe for ActiveMonitor {
     }
 }
 
-struct WirelessStrengthMonitor(NetworkObject, NetworkManager);
+struct WirelessStrengthMonitor(OwnedObjectPath, NetworkManager);
 
 impl Recipe for WirelessStrengthMonitor {
     type Output = f64;
@@ -203,7 +206,7 @@ impl Recipe for WirelessStrengthMonitor {
     }
 }
 
-struct CellularStrengthMonitor(NetworkObject, NetworkManager);
+struct CellularStrengthMonitor(OwnedObjectPath, NetworkManager);
 
 impl Recipe for CellularStrengthMonitor {
     type Output = f64;

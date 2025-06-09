@@ -11,7 +11,7 @@ use iced::{
     widget::{Space, container::Style},
 };
 use iced_winit::futures::BoxStream;
-use liischte_lib::StreamErrorLog;
+use liischte_lib::StreamContext;
 use liischte_lib::hyprland::{HyprlandInstance, WorkspaceState};
 use log::debug;
 

@@ -5,7 +5,7 @@ edition = "2024"
 
 [dependencies]
 # we use a lot of async
-tokio = { version = "1.44.1", features = ["net", "fs", "io-util", "sync"] }
+tokio = { version = "1.44.1", features = ["net", "fs", "io-util", "sync", "macros"] }
 tokio-stream = { version = "0.1.17", features = ["fs", "io-util", "sync"] }
 
 futures = "0.3.31"

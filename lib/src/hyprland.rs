@@ -9,7 +9,7 @@ use tokio::{
 };
 use tokio_stream::wrappers::LinesStream;
 
-use crate::{StaticStream, StreamErrorLog, util::StreamCustomExt};
+use crate::{StaticStream, StreamContext, util::StreamCustomExt};
 
 #[derive(Deserialize, Clone, Debug)]
 pub struct WorkspaceState {

@@ -1,4 +1,3 @@
-use anyhow::Result;
 use futures::stream::BoxStream;
 use log::warn;
 
@@ -17,18 +16,31 @@ mod util;
 /// a boxed stream with a static lifetime
 pub type StaticStream<T> = BoxStream<'static, T>;
 
-/// extension trait for anyhow result to log from a stream
-pub trait StreamErrorLog<T> {
+/// an extension trait to log and pretend nothing happend if we encounter errors
+/// in a stream
+pub trait StreamContext<T, E> {
     fn stream_log(self, name: &str) -> Option<T>;
+    fn stream_context(self, stream: &str, context: &str) -> Option<T>;
 }
 
-/// log the current error and pretend nothing happened
-impl<T> StreamErrorLog<T> for Result<T> {
-    fn stream_log(self, name: &str) -> Option<T> {
+impl<T, E: std::fmt::Display> StreamContext<T, E> for Result<T, E> {
+    /// just log as the given stream name
+    fn stream_log(self, stream: &str) -> Option<T> {
         match self {
             Ok(r) => Some(r),
             Err(e) => {
-                warn!("failure in stream `{name}`: {e:#}");
+                warn!("failure in stream `{stream}`: {e:#}");
+                None
+            }
+        }
+    }
+
+    /// just log as the given stream name with some additional context
+    fn stream_context(self, stream: &str, context: &str) -> Option<T> {
+        match self {
+            Ok(value) => Some(value),
+            Err(e) => {
+                warn!("failure in stream `{stream}`: {context} ({e:#})");
                 None
             }
         }

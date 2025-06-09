@@ -1,4 +1,4 @@
-use std::{hash::Hasher as _, rc::Rc, sync::Arc};
+use std::{hash::Hasher as _, sync::Arc};
 
 use iced::{
     Element, Renderer, Subscription, Task, Theme,
@@ -8,7 +8,7 @@ use iced::{
 };
 use iced_winit::futures::BoxStream;
 use liischte_lib::{
-    StreamErrorLog,
+    StreamContext,
     pipewire::{PipewireInstance, default::DefaultState, node::NodeState},
 };
 use log::debug;

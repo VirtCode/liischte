@@ -66,7 +66,7 @@ async fn main() -> iced::Result {
     for status in &CONFIG.statuses {
         liischte.add_status(match status.as_str() {
             POWER_STATUS_IDENTIFIER => Box::new(PowerStatus::new().await.unwrap()),
-            NETWORK_STATUS_IDENTIFIER => Box::new(NetworkStatus::new().await),
+            NETWORK_STATUS_IDENTIFIER => Box::new(NetworkStatus::new().await.unwrap()),
             AUDIO_STATUS_IDENTIFIER => Box::new(AudioStatus::new()),
             status => panic!("status `{status}` does not exist in this version"),
         });

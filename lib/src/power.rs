@@ -7,7 +7,7 @@ use tokio::{fs, time::Instant};
 use tokio_stream::wrappers::ReadDirStream;
 use udev::MonitorBuilder;
 
-use crate::{StaticStream, StreamErrorLog};
+use crate::{StaticStream, StreamContext};
 
 use super::util::udev::AsyncMonitorSocket;
 

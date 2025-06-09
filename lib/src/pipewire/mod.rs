@@ -14,7 +14,7 @@ use tokio::sync::broadcast::{self, Receiver as BcReceiver, Sender as BcSender};
 use tokio_stream::wrappers::BroadcastStream;
 
 use crate::{
-    StaticStream, StreamErrorLog,
+    StaticStream, StreamContext,
     pipewire::{
         default::{DefaultState, DefaultTracker},
         node::{NodeState, NodeTracker},
@@ -59,8 +59,7 @@ impl PipewireInstance {
     pub fn listen_defaults(&self) -> StaticStream<DefaultState> {
         BroadcastStream::new(self.defaults.resubscribe())
             .filter_map(async |r| {
-                r.context("failed to receive from broadcast")
-                    .stream_log("pipewire defaults receiver")
+                r.stream_context("pw defaults", "failed to receive from broadcast")
             })
             .boxed()
     }
@@ -68,9 +67,7 @@ impl PipewireInstance {
     /// listen to changes to the system's sinks
     pub fn listen_sinks(&self) -> StaticStream<Vec<NodeState>> {
         BroadcastStream::new(self.sinks.resubscribe())
-            .filter_map(async |r| {
-                r.context("failed to receive from broadcast").stream_log("pipewire sink receiver")
-            })
+            .filter_map(async |r| r.stream_context("pw sinks", "failed to receive from broadcast"))
             .boxed()
     }
 
@@ -78,7 +75,7 @@ impl PipewireInstance {
     pub fn listen_sources(&self) -> StaticStream<Vec<NodeState>> {
         BroadcastStream::new(self.sources.resubscribe())
             .filter_map(async |r| {
-                r.context("failed to receive from broadcast").stream_log("pipewire source receiver")
+                r.stream_context("pw sources", "failed to receive from broadcast")
             })
             .boxed()
     }

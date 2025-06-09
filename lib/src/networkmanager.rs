@@ -1,4 +1,4 @@
-use std::{collections::HashMap, future, ops::Deref};
+use std::{collections::HashMap, future};
 
 use anyhow::{Context, Result};
 use futures::{
@@ -11,9 +11,9 @@ use tokio::{select, sync::mpsc};
 use tokio_stream::wrappers::ReceiverStream;
 use zbus::Connection;
 
-use crate::{StaticStream, StreamErrorLog, util::StreamCustomExt};
+use crate::{StaticStream, StreamContext, util::StreamCustomExt};
 
-pub use zbus::zvariant::OwnedObjectPath as NetworkObject;
+pub use zbus::zvariant::OwnedObjectPath;
 
 #[derive(Clone)] // everything in here's reference counted anyways
 pub struct NetworkManager {
@@ -34,7 +34,9 @@ impl NetworkManager {
     }
 
     /// listen to changes of the primarily used connection
-    pub async fn listen_primary_connection(&self) -> StaticStream<Option<NetworkObject>> {
+    pub async fn listen_primary_connection(&self) -> StaticStream<Option<OwnedObjectPath>> {
+        const STREAM: &str = "nm primary connection";
+
         self.proxy
             .receive_primary_connection_changed()
             .await
@@ -42,8 +44,7 @@ impl NetworkManager {
                 change
                     .get()
                     .await
-                    .context("failed to get new primary connection name")
-                    .stream_log("network manager listen primary connection")
+                    .stream_context(STREAM, "failed to get new primary connection path")
                     .map(
                         |path| {
                             if path.is_empty() || path.as_str() == "/" { None } else { Some(path) }
@@ -55,6 +56,8 @@ impl NetworkManager {
 
     /// listen to all active connections
     pub fn listen_active_connections(self) -> StaticStream<Vec<ActiveConnection>> {
+        const STREAM: &str = "nm active connections";
+
         let (tx, rx) = mpsc::channel(1);
 
         tokio::spawn(async move {
@@ -65,16 +68,14 @@ impl NetworkManager {
                 .proxy
                 .active_connections()
                 .await
-                .context("failed to read active connections")
-                .stream_log("nm ac con")
+                .stream_context(STREAM, "failed to read active connections")
                 .unwrap_or_default();
 
             for path in paths {
                 if let Some((tracker, state)) =
                     TrackedActiveConnection::track(path, &self.connection)
                         .await
-                        .context("failed to track new network manager connection")
-                        .stream_log("nm ac con")
+                        .stream_context(STREAM, "failed to track initial active connection")
                 {
                     trackers.insert(tracker.path.clone(), tracker);
                     states.insert(state.path.clone(), state);
@@ -89,8 +90,7 @@ impl NetworkManager {
                     change
                         .get()
                         .await
-                        .context("failed to get new active connections")
-                        .stream_log("network manager active connections")
+                        .stream_context(STREAM, "failed to get new active connections")
                 })
                 .boxed();
 
@@ -119,8 +119,7 @@ impl NetworkManager {
 
                             if let Some((tracker, state)) = TrackedActiveConnection::track(path, &self.connection)
                                 .await
-                                .context("failed to track new network manager connection")
-                                .stream_log("nm ac con")
+                                .stream_context(STREAM, "failed to track new active connection")
                             {
                                 trackers.insert(tracker.path.clone(), tracker);
                                 states.insert(state.path.clone(), state);
@@ -143,7 +142,9 @@ impl NetworkManager {
     /// listen to the wifi signal strength on a given device. note that the
     /// device passed here must be a wireless device, otherwise the stream won't
     /// produce anything
-    pub fn listen_wireless_strength(self, device: NetworkObject) -> StaticStream<f64> {
+    pub fn listen_wireless_strength(self, device: OwnedObjectPath) -> StaticStream<f64> {
+        const STREAM: &str = "nm wireless strength";
+
         let (tx, rx) = mpsc::channel(1);
 
         fn convert_strength(strength: u8) -> f64 {
@@ -153,14 +154,13 @@ impl NetworkManager {
         tokio::spawn(async move {
             let Some(proxy) = WirelessProxy::new_from_path(device, &self.connection)
                 .await
-                .context("failed to bind to wireless device")
-                .stream_log("nm wifi strength")
+                .stream_context(STREAM, "failed to bind to wireless device")
             else {
                 return;
             };
 
             async fn track_ap<'a>(
-                ap: NetworkObject,
+                ap: OwnedObjectPath,
                 connection: &'a Connection,
             ) -> Option<(AccessPointProxy<'a>, BoxStream<'a, f64>)> {
                 // we don't want to try bind non-aps
@@ -172,8 +172,7 @@ impl NetworkManager {
 
                 let proxy = AccessPointProxy::new_from_path(ap, connection)
                     .await
-                    .context("failed to bind to access point")
-                    .stream_log("nm wifi strength")?;
+                    .stream_context(STREAM, "failed to bind to access point")?;
 
                 let stream = proxy
                     .receive_strength_changed()
@@ -181,8 +180,7 @@ impl NetworkManager {
                     .filter_map(async |a| {
                         a.get()
                             .await
-                            .context("failed to read new access point strength")
-                            .stream_log("nm wifi strength")
+                            .stream_context(STREAM, "failed to read new strength")
                             .map(convert_strength)
                     })
                     .boxed();
@@ -193,8 +191,7 @@ impl NetworkManager {
             let mut ap = if let Some(path) = proxy
                 .active_access_point()
                 .await
-                .context("failed to read active ap")
-                .stream_log("nm wifi strength")
+                .stream_context(STREAM, "failed to read initial active access point")
             {
                 track_ap(path, &self.connection).await
             } else {
@@ -208,8 +205,7 @@ impl NetworkManager {
                     change
                         .get()
                         .await
-                        .context("failed to get new active access point")
-                        .stream_log("nm wifi strength")
+                        .stream_context(STREAM, "failed to read new active access point")
                 })
                 .boxed();
 
@@ -223,8 +219,7 @@ impl NetworkManager {
                         if let Some(strength) = proxy
                             .strength()
                             .await
-                            .context("failed to read strength for new ap")
-                            .stream_log("nm wifi strength")
+                            .stream_context(STREAM, "failed to read new strength")
                         {
                             if let Err(_) = tx.send(convert_strength(strength)).await {
                                 debug!("wireless strength stream was dropped");
@@ -264,14 +259,14 @@ impl NetworkManager {
 }
 
 pub struct TrackedActiveConnection<'a> {
-    path: NetworkObject,
+    path: OwnedObjectPath,
     _proxy: ActiveProxy<'a>,
     stream: BoxStream<'a, ActiveConnection>,
 }
 
 impl<'a> TrackedActiveConnection<'a> {
     pub async fn track(
-        path: NetworkObject,
+        path: OwnedObjectPath,
         connection: &'a Connection,
     ) -> Result<(Self, ActiveConnection)> {
         let proxy = ActiveProxy::new_from_path(path.clone(), &connection)
@@ -286,13 +281,13 @@ impl<'a> TrackedActiveConnection<'a> {
             device: proxy.devices().await?.first().cloned(),
         };
 
-        debug!("tracking connection {} ('{}')", describe_path(&path), initial.name);
+        debug!("tracking connection {} (`{}`)", describe_path(&path), initial.name);
 
         enum Event {
             Name(String),
             Kind(ActiveConnectionKind),
             State(ActiveConnectionState),
-            Device(Option<NetworkObject>),
+            Device(Option<OwnedObjectPath>),
         }
 
         fn describe_event(event: &Event) -> &'static str {
@@ -357,7 +352,7 @@ impl<'a> TrackedActiveConnection<'a> {
 #[derive(Clone, Debug)]
 pub struct ActiveConnection {
     /// dbus path of the connection (see primary connection)
-    pub path: NetworkObject,
+    pub path: OwnedObjectPath,
     /// name of the connection displayed to the user
     pub name: String,
     /// type of the connection
@@ -365,7 +360,7 @@ pub struct ActiveConnection {
     /// state of the connection
     pub state: ActiveConnectionState,
     /// underlying device if there is any
-    pub device: Option<NetworkObject>,
+    pub device: Option<OwnedObjectPath>,
 }
 
 /// current state of a connection
