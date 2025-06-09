@@ -1,4 +1,4 @@
-use std::{collections::HashMap, future};
+use std::{collections::HashMap, future, ops::Deref};
 
 use anyhow::{Context, Result};
 use futures::{
@@ -17,8 +17,8 @@ pub use zbus::zvariant::OwnedObjectPath as NetworkObject;
 
 #[derive(Clone)] // everything in here's reference counted anyways
 pub struct NetworkManager {
-    connection: Connection,
-    proxy: NetworkManagerProxy<'static>,
+    pub(crate) connection: Connection,
+    pub(crate) proxy: NetworkManagerProxy<'static>,
 }
 
 impl NetworkManager {
@@ -168,6 +168,8 @@ impl NetworkManager {
                     return None;
                 }
 
+                debug!("tracking access point {} for signal strength", describe_path(&ap));
+
                 let proxy = AccessPointProxy::new_from_path(ap, connection)
                     .await
                     .context("failed to bind to access point")
@@ -284,7 +286,7 @@ impl<'a> TrackedActiveConnection<'a> {
             device: proxy.devices().await?.first().cloned(),
         };
 
-        debug!("tracking connection {path} ('{}')", initial.name);
+        debug!("tracking connection {} ('{}')", describe_path(&path), initial.name);
 
         enum Event {
             Name(String),
@@ -331,7 +333,11 @@ impl<'a> TrackedActiveConnection<'a> {
                 .boxed(),
         ])
         .scan_owning(initial.clone(), async |mut state, event| {
-            trace!("updating {} property for connection '{}'", describe_event(&event), &state.path);
+            trace!(
+                "updating `{}` property for connection {}",
+                describe_event(&event),
+                describe_path(&state.path)
+            );
 
             match event {
                 Event::Name(name) => state.name = name,
@@ -412,4 +418,19 @@ impl ActiveConnectionKind {
             a => Self::Unknown(a.to_owned()),
         }
     }
+}
+
+pub fn describe_path(path: &str) -> &str {
+    let mut count = 0;
+
+    for (i, c) in path.chars().rev().enumerate() {
+        if c == '/' {
+            count += 1;
+        }
+        if count == 2 {
+            return &path[(path.len() - i)..];
+        }
+    }
+
+    return path;
 }

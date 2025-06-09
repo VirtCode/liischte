@@ -30,10 +30,14 @@ pipewire = { git = "https://gitlab.freedesktop.org/pipewire/pipewire-rs", option
 zbus = { version = "5.7.1", default-features = false, features = ["tokio"], optional = true }
 rusty_network_manager = { git = "https://github.com/flukejones/network_manager", optional = true, default-features = false, features = ["access_point", "active", "wireless"] }
 
+# modem manager
+modemmanager = { git = "https://github.com/omnect/modemmanager", optional = true}
+
 [features]
 hyprland = []
 power = ["dep:udev"]
 pipewire = ["dep:pipewire"]
 networkmanager = ["dep:zbus", "dep:rusty_network_manager"]
+modemmanager = ["networkmanager", "dep:modemmanager", "rusty_network_manager/device"]
 
-default = ["hyprland", "power", "pipewire", "networkmanager"]
+default = ["hyprland", "power", "pipewire", "networkmanager", "modemmanager"]

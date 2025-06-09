@@ -7,27 +7,39 @@ use iced::{
 };
 use iced_winit::futures::BoxStream;
 use liischte_lib::networkmanager::{
-    ActiveConnection, ActiveConnectionKind, NetworkManager, NetworkObject,
+    ActiveConnection, ActiveConnectionKind, NetworkManager, NetworkObject, describe_path,
 };
-use log::debug;
+use log::{debug, error, trace};
 use lucide_icons::Icon;
+use serde::Deserialize;
 
 use crate::{
+    config::CONFIG,
     status::{Status, StatusMessage},
     ui::icon,
 };
 
 pub const NETWORK_STATUS_IDENTIFIER: &str = "network";
 
+#[derive(Deserialize, Default)]
+#[serde(default)]
+struct NetworkStatusConfig {
+    /// enable modem manager support
+    modem: bool,
+}
+
 impl StatusMessage for NetworkMessage {}
 #[derive(Clone, Debug)]
 pub enum NetworkMessage {
     PrimaryConnection(Option<NetworkObject>),
     ActiveConnections(Vec<ActiveConnection>),
+
     WirelessStrength(f64),
+    CellularStrength(f64),
 }
 
 pub struct NetworkStatus {
+    config: NetworkStatusConfig,
     nm: NetworkManager,
 
     active: Vec<ActiveConnection>,
@@ -36,16 +48,19 @@ pub struct NetworkStatus {
     primary_path: Option<NetworkObject>, /* we need this if the primary is communicated before
                                           * the active */
     wireless_strength: f64,
+    cellular_strength: f64,
 }
 
 impl NetworkStatus {
     pub async fn new() -> Self {
         Self {
+            config: CONFIG.status(NETWORK_STATUS_IDENTIFIER),
             nm: NetworkManager::connnect().await.unwrap(),
             active: vec![],
             primary: None,
             primary_path: None,
             wireless_strength: 1f64,
+            cellular_strength: 1f64,
         }
     }
 }
@@ -60,13 +75,23 @@ impl Status for NetworkStatus {
         ];
 
         if let Some(ref primary) = self.primary
-            && primary.kind == ActiveConnectionKind::Wireless
             && let Some(ref device) = primary.device
         {
-            subs.push(
-                from_recipe(WirelessStrengthMonitor(device.clone(), self.nm.clone()))
-                    .map(NetworkMessage::WirelessStrength),
-            );
+            match (&primary.kind, self.config.modem) {
+                (ActiveConnectionKind::Wireless, _) => {
+                    subs.push(
+                        from_recipe(WirelessStrengthMonitor(device.clone(), self.nm.clone()))
+                            .map(NetworkMessage::WirelessStrength),
+                    );
+                }
+                (ActiveConnectionKind::Cellular, true) => {
+                    subs.push(
+                        from_recipe(CellularStrengthMonitor(device.clone(), self.nm.clone()))
+                            .map(NetworkMessage::CellularStrength),
+                    );
+                }
+                _ => {}
+            }
         }
 
         Subscription::batch(subs)
@@ -84,7 +109,14 @@ impl Status for NetworkStatus {
                 }
             }
             NetworkMessage::ActiveConnections(active) => self.active = active.clone(),
-            NetworkMessage::WirelessStrength(strength) => self.wireless_strength = *strength,
+            NetworkMessage::WirelessStrength(strength) => {
+                trace!("reported wireless strength: {strength}");
+                self.wireless_strength = *strength
+            }
+            NetworkMessage::CellularStrength(strength) => {
+                trace!("reported cellular strength: {strength}");
+                self.cellular_strength = *strength
+            }
         };
 
         // if we first receive the primary before the active connection
@@ -108,7 +140,13 @@ impl Status for NetworkStatus {
                 _ if self.wireless_strength > 0.25 => Icon::WifiLow,
                 _ => Icon::WifiZero,
             },
-            ActiveConnectionKind::Cellular => Icon::Signal,
+            ActiveConnectionKind::Cellular => match () {
+                _ if self.cellular_strength > 0.8 => Icon::Signal,
+                _ if self.cellular_strength > 0.6 => Icon::SignalHigh,
+                _ if self.cellular_strength > 0.4 => Icon::SignalMedium,
+                _ if self.cellular_strength > 0.2 => Icon::SignalLow,
+                _ => Icon::SignalZero,
+            },
             ActiveConnectionKind::Unknown(_) => Icon::Waypoints,
         };
 
@@ -159,8 +197,25 @@ impl Recipe for WirelessStrengthMonitor {
     }
 
     fn stream(self: Box<Self>, _input: EventStream) -> BoxStream<Self::Output> {
-        debug!("staring wireless strength listener for {}", self.0);
+        debug!("staring wireless strength monitor for {}", describe_path(&self.0));
 
         self.1.listen_wireless_strength(self.0)
+    }
+}
+
+struct CellularStrengthMonitor(NetworkObject, NetworkManager);
+
+impl Recipe for CellularStrengthMonitor {
+    type Output = f64;
+
+    fn hash(&self, state: &mut Hasher) {
+        state.write_str("network cellular strength events");
+        state.write_str(self.0.as_str());
+    }
+
+    fn stream(self: Box<Self>, _input: EventStream) -> BoxStream<Self::Output> {
+        debug!("staring cellular strength monitor for {}", describe_path(&self.0));
+
+        self.1.listen_cellular_strength(self.0)
     }
 }

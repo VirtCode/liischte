@@ -4,6 +4,8 @@ use log::warn;
 
 #[cfg(feature = "hyprland")]
 pub mod hyprland;
+#[cfg(feature = "modemmanager")]
+pub mod modemmanager;
 #[cfg(feature = "networkmanager")]
 pub mod networkmanager;
 #[cfg(feature = "pipewire")]

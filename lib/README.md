@@ -10,3 +10,5 @@ Here are the features that the _liischte-lib_ already implements. They all corre
 - `power`: Battery and ac status of the system. Uses the `sysfs` to obtain the data and listens to `udev` events for reactive updates.
 - `hyprland`: Workspace information about a running hyprland instance. Uses hyprland's IPC to obtain and react to the latest changes. Does _NOT_ depend on `hyprland-rs`.
 - `pipewire`: Audio device info and events. Uses `libpipewire` to interface with pipewire natively and independent of session manager.
+- `networkmanager`: Network connection status and change events. Uses the `NetworkManager` dbus interface and provides only as much info as needed.
+- `modemmanager`: Modem signal strength information and changes. This is an extension on the `networkmanager` feature which can be used to track signal strength of a cellular connection. Uses the `ModemManager` dbus interface.
