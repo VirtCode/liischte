@@ -6,11 +6,14 @@ use dyn_clone::{DynClone, clone_trait_object};
 use iced::{Element, Renderer, Subscription, Task, Theme, widget::Space};
 use log::trace;
 
-use crate::ui::empty;
+use crate::{osd::OsdId, ui::empty};
 
 pub mod audio;
 pub mod network;
 pub mod power;
+
+/// id representing a module (or rather it's message)
+pub type ModuleId = TypeId;
 
 /// this trait makes sure downcasting works for the message of the custom module
 pub trait ModuleMessage: DynClone + Any + Send + Debug {}
@@ -27,15 +30,28 @@ pub trait Module: Send {
 
     /// the iced update method which mutates the state based on messages
     /// received
-    fn update(&mut self, message: &Self::Message) -> (Task<Self::Message>, bool);
+    fn update(&mut self, message: &Self::Message) -> (Task<Self::Message>, Option<OsdId>);
 
-    /// the iced render method, which renders the status based on internal state
-    fn render_status(&self) -> Element<'_, Self::Message, Theme, Renderer>;
+    /// reports whether the module has a status indicator
+    /// this should stay the same during the whole application lifecycle (use
+    /// infos for dynamic appearance)
+    fn has_status(&self) -> bool {
+        false
+    }
+
+    /// the iced render method, which renders a potential info
+    fn render_status(&self) -> Element<'_, Self::Message, Theme, Renderer> {
+        panic!("module does not implement status but is rendered")
+    }
+
+    /// the iced render method, which renders the status
+    fn render_info(&self) -> Option<Element<'_, Self::Message, Theme, Renderer>> {
+        None
+    }
 
     /// the iced render method, which renders the osd
-    fn render_osd(&self) -> Element<'_, Self::Message, Theme, Renderer> {
-        // just show nothing if the status did not implement it
-        empty().into()
+    fn render_osd(&self, id: OsdId) -> Element<'_, Self::Message, Theme, Renderer> {
+        panic!("module does not implement osd but is rendered");
     }
 }
 
@@ -45,28 +61,42 @@ pub trait Module: Send {
 /// descriptions
 #[async_trait]
 pub trait AbstractModule: Send {
-    fn message_type(&self) -> TypeId;
+    fn message_type(&self) -> ModuleId;
+
+    fn has_status(&self) -> bool;
 
     fn subscribe(&self) -> Subscription<Box<dyn ModuleMessage>>;
 
-    fn update(&mut self, message: Box<dyn ModuleMessage>) -> (Task<Box<dyn ModuleMessage>>, bool);
+    fn update(
+        &mut self,
+        message: Box<dyn ModuleMessage>,
+    ) -> (Task<Box<dyn ModuleMessage>>, Option<OsdId>);
 
     fn render_status(&self) -> Element<'_, Box<dyn ModuleMessage>, Theme, Renderer>;
 
-    fn render_osd(&self) -> Element<'_, Box<dyn ModuleMessage>, Theme, Renderer>;
+    fn render_info(&self) -> Option<Element<'_, Box<dyn ModuleMessage>, Theme, Renderer>>;
+
+    fn render_osd(&self, id: OsdId) -> Element<'_, Box<dyn ModuleMessage>, Theme, Renderer>;
 }
 
 #[async_trait]
 impl<T: Module> AbstractModule for T {
-    fn message_type(&self) -> TypeId {
+    fn message_type(&self) -> ModuleId {
         TypeId::of::<<T as Module>::Message>()
+    }
+
+    fn has_status(&self) -> bool {
+        self.has_status()
     }
 
     fn subscribe(&self) -> Subscription<Box<dyn ModuleMessage>> {
         Module::subscribe(self).map(|msg| -> Box<dyn ModuleMessage> { Box::new(msg) })
     }
 
-    fn update(&mut self, message: Box<dyn ModuleMessage>) -> (Task<Box<dyn ModuleMessage>>, bool) {
+    fn update(
+        &mut self,
+        message: Box<dyn ModuleMessage>,
+    ) -> (Task<Box<dyn ModuleMessage>>, Option<OsdId>) {
         trace!(
             "passing module message for {}",
             std::any::type_name_of_val(self).rsplit("::").next().unwrap_or_default()
@@ -85,7 +115,12 @@ impl<T: Module> AbstractModule for T {
         Module::render_status(self).map(|msg| -> Box<dyn ModuleMessage> { Box::new(msg) })
     }
 
-    fn render_osd(&self) -> Element<'_, Box<dyn ModuleMessage>, Theme, Renderer> {
-        Module::render_osd(self).map(|msg| -> Box<dyn ModuleMessage> { Box::new(msg) })
+    fn render_info(&self) -> Option<Element<'_, Box<dyn ModuleMessage>, Theme, Renderer>> {
+        Module::render_info(self)
+            .map(|elem| elem.map(|msg| -> Box<dyn ModuleMessage> { Box::new(msg) }))
+    }
+
+    fn render_osd(&self, id: OsdId) -> Element<'_, Box<dyn ModuleMessage>, Theme, Renderer> {
+        Module::render_osd(self, id).map(|msg| -> Box<dyn ModuleMessage> { Box::new(msg) })
     }
 }

@@ -15,7 +15,7 @@ use lucide_icons::Icon;
 use serde::Deserialize;
 
 use super::{Module, ModuleMessage};
-use crate::{config::CONFIG, ui::icon};
+use crate::{config::CONFIG, osd::OsdId, ui::icon};
 
 pub const NETWORK_MODULE_IDENTIFIER: &str = "network";
 
@@ -97,7 +97,7 @@ impl Module for NewtorkModule {
         Subscription::batch(subs)
     }
 
-    fn update(&mut self, message: &Self::Message) -> (Task<Self::Message>, bool) {
+    fn update(&mut self, message: &Self::Message) -> (Task<Self::Message>, Option<OsdId>) {
         match message {
             NetworkMessage::PrimaryConnection(primary) => {
                 self.primary_path = primary.clone();
@@ -126,7 +126,11 @@ impl Module for NewtorkModule {
             self.primary = self.active.iter().find(|con| con.path == *primary).cloned();
         }
 
-        (Task::none(), false)
+        (Task::none(), None)
+    }
+
+    fn has_status(&self) -> bool {
+        true
     }
 
     fn render_status(&self) -> Element<'_, Self::Message, Theme, Renderer> {

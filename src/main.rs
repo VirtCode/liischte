@@ -1,5 +1,5 @@
 #![feature(hasher_prefixfree_extras)]
-use std::{any::TypeId, collections::HashMap, time::Duration};
+use std::{collections::HashMap, time::Duration};
 
 use clock::{Clock, ClockMessage};
 use config::CONFIG;
@@ -33,6 +33,7 @@ use ui::{empty, separator, window::layer_window};
 use iced::widget::container as create_container;
 
 use crate::{
+    module::ModuleId,
     osd::{OsdHandler, OsdMessage},
     ui::PILL_RADIUS,
 };
@@ -101,11 +102,11 @@ enum Message {
 struct Liischte {
     clock: Clock,
     hyprland: Option<Hyprland>,
-    modules: HashMap<TypeId, Box<dyn AbstractModule>>,
+    modules: HashMap<ModuleId, Box<dyn AbstractModule>>,
 
     osd: Option<OsdHandler>,
 
-    pub surface_bar: SurfaceId,
+    pub surface: SurfaceId,
 }
 
 impl Liischte {
@@ -117,7 +118,7 @@ impl Liischte {
 
             osd: if CONFIG.osd.enabled { Some(OsdHandler::new()) } else { None },
 
-            surface_bar: SurfaceId::unique(),
+            surface: SurfaceId::unique(),
         }
     }
 
@@ -133,7 +134,7 @@ impl Liischte {
 
     fn init(&mut self) -> Task<Message> {
         get_layer_surface(SctkLayerSurfaceSettings {
-            id: self.surface_bar,
+            id: self.surface,
 
             layer: Layer::Top,
             anchor: Anchor::TOP
@@ -171,16 +172,18 @@ impl Liischte {
             Message::Status(msg) => {
                 let id = (*msg).type_id();
 
-                let (task, want_osd) = self
+                let (task, osd) = self
                     .modules
                     .get_mut(&id)
                     .expect("received status message for non-existent status")
                     .update(msg);
 
-                if want_osd && let Some(osd) = &mut self.osd {
+                if let Some(osd_id) = osd
+                    && let Some(osd) = &mut self.osd
+                {
                     Task::batch(vec![
                         task.map(Message::Status),
-                        osd.request_osd(id).map(Message::Osd),
+                        osd.request_osd(id, osd_id).map(Message::Osd),
                     ])
                 } else {
                     task.map(Message::Status)
@@ -210,10 +213,10 @@ impl Liischte {
     }
 
     fn view(&self, id: SurfaceId) -> iced::Element<'_, Message, Theme, iced::Renderer> {
-        if id == self.surface_bar {
+        if id == self.surface {
             self.view_bar()
         } else if let Some(osd) = &self.osd
-            && id == osd.surface_osd
+            && id == osd.surface
         {
             self.view_osd()
         } else {
@@ -230,7 +233,10 @@ impl Liischte {
                 .unwrap_or_else(|| column![].into()),
             vertical_space(),
             Column::from_iter(
-                self.modules.values().map(|status| status.render_status().map(Message::Status)),
+                self.modules
+                    .values()
+                    .filter(|module| module.has_status())
+                    .map(|module| module.render_status().map(Message::Status)),
             )
             .spacing(4),
             separator(),
@@ -243,17 +249,18 @@ impl Liischte {
     }
 
     fn view_osd(&self) -> iced::Element<'_, Message, Theme, iced::Renderer> {
-        let widget: iced::Element<'_, Message, Theme, iced::Renderer> = if let Some(ref id) =
-            self.osd.as_ref().expect("rendering osd without enabled").get_active()
-        {
-            self.modules
-                .get(id)
-                .expect("tried to show osd from non-existent status")
-                .render_osd()
-                .map(Message::Status)
-        } else {
-            empty().into()
-        };
+        let widget: iced::Element<'_, Message, Theme, iced::Renderer> =
+            if let Some((ref id, ref osd)) =
+                self.osd.as_ref().expect("rendering osd without enabled").get_active()
+            {
+                self.modules
+                    .get(id)
+                    .expect("tried to show osd from non-existent status")
+                    .render_osd(*osd)
+                    .map(Message::Status)
+            } else {
+                empty().into()
+            };
 
         create_container(
             create_container(widget)

@@ -1,4 +1,4 @@
-use std::{any::TypeId, time::Duration};
+use std::time::Duration;
 
 use iced::{
     Limits, Task,
@@ -12,19 +12,23 @@ use iced_winit::commands::{
     layer_surface::{destroy_layer_surface, get_layer_surface},
     subsurface::{Anchor, Layer},
 };
-use log::info;
+use log::{debug, info};
 use tokio::time::sleep;
 
-use crate::config::CONFIG;
+use crate::{config::CONFIG, module::ModuleId};
+
+/// an id that can be returned by a module to differentiate betweent it's own
+/// different osds, different ids will cause respawning
+pub type OsdId = u32;
 
 pub struct OsdHandler {
-    current: Option<TypeId>,
-    last: Option<TypeId>, // iced re-renders before the surface is closed
+    current: Option<(ModuleId, OsdId)>,
+    last: Option<(ModuleId, OsdId)>, // iced re-renders before the surface is closed
 
     timeout: Option<Handle>,
     respawning: bool,
 
-    pub surface_osd: Id,
+    pub surface: Id,
 }
 
 #[derive(Debug, Clone)]
@@ -36,26 +40,20 @@ pub enum OsdMessage {
 impl OsdHandler {
     /// create a new handler
     pub fn new() -> Self {
-        Self {
-            current: None,
-            last: None,
-            timeout: None,
-            respawning: false,
-            surface_osd: Id::unique(),
-        }
+        Self { current: None, last: None, timeout: None, respawning: false, surface: Id::unique() }
     }
 
     /// update the inner state based on a message
     pub fn update(&mut self, message: OsdMessage) -> Task<OsdMessage> {
         match message {
             OsdMessage::Close => {
-                info!("closing osd layer");
+                debug!("closing osd layer");
                 let last = self.current.take();
 
                 self.destroy_surface(last)
             }
             OsdMessage::Respawn => {
-                info!("respawning osd layer");
+                debug!("respawning osd layer");
                 self.respawning = false;
 
                 Task::batch(vec![self.create_surface(), self.reset_timeout()])
@@ -64,22 +62,22 @@ impl OsdHandler {
     }
 
     /// requests the osd for a given id
-    pub fn request_osd(&mut self, id: TypeId) -> Task<OsdMessage> {
-        let same = self.current == Some(id);
+    pub fn request_osd(&mut self, id: ModuleId, osd: OsdId) -> Task<OsdMessage> {
+        let same = self.current == Some((id, osd));
         let alive = self.current.is_some();
 
         let last = self.current;
-        self.current = Some(id);
+        self.current = Some((id, osd));
 
         let task = match (alive, same, self.respawning) {
             // spawn surface if not alive and not respawning
             (false, _, false) => {
-                info!("spawning osd layer");
+                debug!("spawning osd layer");
                 self.create_surface()
             }
             // respawn surface if alive but not the same (and not already respawning)
             (true, false, false) => {
-                info!("closing osd layer for respawn");
+                debug!("closing osd layer for respawn");
                 self.respawning = true;
 
                 Task::batch(vec![
@@ -97,7 +95,7 @@ impl OsdHandler {
     }
 
     /// returns the active osd
-    pub fn get_active(&self) -> Option<TypeId> {
+    pub fn get_active(&self) -> Option<(ModuleId, u32)> {
         self.current.or(self.last)
     }
 
@@ -111,17 +109,17 @@ impl OsdHandler {
         timeout
     }
 
-    fn destroy_surface(&mut self, last: Option<TypeId>) -> Task<OsdMessage> {
+    fn destroy_surface(&mut self, last: Option<(ModuleId, u32)>) -> Task<OsdMessage> {
         self.last = last;
 
-        destroy_layer_surface(self.surface_osd)
+        destroy_layer_surface(self.surface)
     }
 
     fn create_surface(&self) -> Task<OsdMessage> {
         //return Task::none();
 
         get_layer_surface(SctkLayerSurfaceSettings {
-            id: self.surface_osd,
+            id: self.surface,
 
             layer: Layer::Overlay,
             anchor: Anchor::TOP

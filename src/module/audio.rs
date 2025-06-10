@@ -18,6 +18,7 @@ use lucide_icons::Icon;
 use super::{Module, ModuleMessage};
 use crate::{
     config::CONFIG,
+    osd::OsdId,
     ui::{
         icon,
         progress::{VerticalProgress, vertical_progress},
@@ -68,7 +69,7 @@ impl Module for AudioModule {
         ])
     }
 
-    fn update(&mut self, message: &Self::Message) -> (Task<Self::Message>, bool) {
+    fn update(&mut self, message: &Self::Message) -> (Task<Self::Message>, Option<OsdId>) {
         match (message, &self.selected) {
             (AudioMessage::DefaultState(defaults), _) => self.defaults = defaults.clone(),
             (AudioMessage::SinkState(nodes), _) => self.sinks = nodes.clone(),
@@ -89,10 +90,14 @@ impl Module for AudioModule {
         };
 
         let new = self.sinks.iter().find(|sink| sink.name == self.defaults.sink).cloned();
-        let changed = new != self.selected;
+        let osd = if new != self.selected { Some(0) } else { None };
         self.selected = new;
 
-        (Task::none(), changed)
+        (Task::none(), osd)
+    }
+
+    fn has_status(&self) -> bool {
+        true
     }
 
     fn render_status(&self) -> Element<'_, Self::Message, Theme, Renderer> {
@@ -124,7 +129,7 @@ impl Module for AudioModule {
             .into()
     }
 
-    fn render_osd(&self) -> Element<'_, Self::Message, Theme, Renderer> {
+    fn render_osd(&self, id: OsdId) -> Element<'_, Self::Message, Theme, Renderer> {
         let (volume, symbol) = if let Some(sink) = self.selected.as_ref() {
             (
                 sink.volume.iter().sum::<f32>() / sink.volume.len() as f32,

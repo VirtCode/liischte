@@ -14,7 +14,7 @@ use log::{debug, error, info};
 use lucide_icons::Icon;
 use serde::Deserialize;
 
-use crate::{config::CONFIG, ui::icon};
+use crate::{config::CONFIG, osd::OsdId, ui::icon};
 
 use super::{Module, ModuleMessage};
 
@@ -136,7 +136,7 @@ impl Module for PowerModule {
         ])
     }
 
-    fn update(&mut self, message: &Self::Message) -> (Task<Self::Message>, bool) {
+    fn update(&mut self, message: &Self::Message) -> (Task<Self::Message>, Option<OsdId>) {
         match message {
             PowerStatusMessage::MainsOnlineMessage(online) => {
                 if let Some(ac) = &mut self.mains {
@@ -150,7 +150,11 @@ impl Module for PowerModule {
             }
         }
 
-        (Task::none(), false)
+        (Task::none(), None)
+    }
+
+    fn has_status(&self) -> bool {
+        true
     }
 
     fn render_status(&self) -> Element<'_, Self::Message, Theme, Renderer> {
