@@ -5,7 +5,7 @@ use iced::{
     advanced::subscription::{EventStream, Hasher, Recipe, from_recipe},
     alignment::Horizontal,
     mouse::ScrollDelta,
-    widget::{column, mouse_area, vertical_slider},
+    widget::{column, mouse_area},
 };
 use iced_winit::futures::BoxStream;
 use liischte_lib::{
@@ -19,19 +19,19 @@ use super::{Module, ModuleMessage};
 use crate::{
     config::CONFIG,
     osd::OsdId,
-    ui::{
-        icon,
-        progress::{VerticalProgress, vertical_progress},
-    },
+    ui::{icon, progress::vertical_progress},
 };
 
 pub const AUDIO_MODULE_IDENTIFIER: &str = "audio";
+
+const OSD_SOURCE_FLAG: u32 = 1u32 << 30;
 
 impl ModuleMessage for AudioMessage {}
 #[derive(Clone, Debug)]
 pub enum AudioMessage {
     DefaultState(DefaultState),
     SinkState(Vec<NodeState>),
+    SourceState(Vec<NodeState>),
 
     ToggleMute,
     ChangeVolume(f32),
@@ -44,17 +44,25 @@ pub struct AudioModule {
 
     defaults: DefaultState,
     sinks: Vec<NodeState>,
+    sources: Vec<NodeState>,
 
-    selected: Option<NodeState>,
+    selected_sink: Option<NodeState>,
+    selected_source: Option<NodeState>,
 }
 
 impl AudioModule {
     pub fn new() -> Self {
+        info!("starting pipewire integration thread");
+
         Self {
             pipewire: Arc::new(PipewireInstance::start()),
+
             defaults: DefaultState::default(),
             sinks: Vec::new(),
-            selected: None,
+            sources: Vec::new(),
+
+            selected_sink: None,
+            selected_source: None,
         }
     }
 }
@@ -66,13 +74,15 @@ impl Module for AudioModule {
         Subscription::batch(vec![
             from_recipe(DefaultMonitor(self.pipewire.clone())).map(AudioMessage::DefaultState),
             from_recipe(SinksMonitor(self.pipewire.clone())).map(AudioMessage::SinkState),
+            from_recipe(SourcesMonitor(self.pipewire.clone())).map(AudioMessage::SourceState),
         ])
     }
 
     fn update(&mut self, message: &Self::Message) -> (Task<Self::Message>, Option<OsdId>) {
-        match (message, &self.selected) {
+        match (message, &self.selected_sink) {
             (AudioMessage::DefaultState(defaults), _) => self.defaults = defaults.clone(),
             (AudioMessage::SinkState(nodes), _) => self.sinks = nodes.clone(),
+            (AudioMessage::SourceState(nodes), _) => self.sources = nodes.clone(),
 
             (AudioMessage::ToggleMute, Some(selected)) => {
                 self.pipewire.set_mute(&selected.name, !selected.mute).ok();
@@ -85,13 +95,27 @@ impl Module for AudioModule {
                     )
                     .ok();
             }
-
             _ => {}
         };
 
-        let new = self.sinks.iter().find(|sink| sink.name == self.defaults.sink).cloned();
-        let osd = if new != self.selected { Some(0) } else { None };
-        self.selected = new;
+        let sink = self.selected_sink.take();
+        let source = self.selected_source.take();
+        self.selected_sink =
+            self.sinks.iter().find(|sink| sink.name == self.defaults.sink).cloned();
+        self.selected_source =
+            self.sources.iter().find(|source| source.name == self.defaults.source).cloned();
+
+        let osd = if self.selected_sink != sink
+            && let Some(ref selected) = self.selected_sink
+        {
+            Some(selected.id)
+        } else if self.selected_source != source
+            && let Some(ref selected) = self.selected_source
+        {
+            Some(OSD_SOURCE_FLAG | selected.id)
+        } else {
+            None
+        };
 
         (Task::none(), osd)
     }
@@ -101,7 +125,7 @@ impl Module for AudioModule {
     }
 
     fn render_status(&self) -> Element<'_, Self::Message, Theme, Renderer> {
-        let Some(sink) = self.selected.as_ref() else {
+        let Some(sink) = self.selected_sink.as_ref() else {
             return icon(Icon::VolumeOff).into();
         };
 
@@ -130,11 +154,14 @@ impl Module for AudioModule {
     }
 
     fn render_osd(&self, id: OsdId) -> Element<'_, Self::Message, Theme, Renderer> {
-        let (volume, symbol) = if let Some(sink) = self.selected.as_ref() {
-            (
-                sink.volume.iter().sum::<f32>() / sink.volume.len() as f32,
-                if sink.mute { Icon::VolumeX } else { Icon::Volume2 },
-            )
+        let (volume, symbol) = if id & OSD_SOURCE_FLAG == 0
+            && let Some(sink) = self.selected_sink.as_ref()
+        {
+            (sink.average_volume(), if sink.mute { Icon::VolumeX } else { Icon::Volume2 })
+        } else if id & OSD_SOURCE_FLAG != 0
+            && let Some(source) = self.selected_source.as_ref()
+        {
+            (source.average_volume(), if source.mute { Icon::Mic } else { Icon::MicOff })
         } else {
             (0f32, Icon::VolumeOff)
         };
@@ -161,6 +188,25 @@ impl Recipe for SinksMonitor {
 
         let stream = self.0.listen_sinks();
         self.0.trigger_update().stream_log("pipewire sink listener"); // we want to get values immediately
+
+        stream
+    }
+}
+
+struct SourcesMonitor(Arc<PipewireInstance>);
+
+impl Recipe for SourcesMonitor {
+    type Output = Vec<NodeState>;
+
+    fn hash(&self, state: &mut Hasher) {
+        state.write_str("audio source events");
+    }
+
+    fn stream(self: Box<Self>, _input: EventStream) -> BoxStream<Self::Output> {
+        debug!("staring audio source listener");
+
+        let stream = self.0.listen_sources();
+        self.0.trigger_update().stream_log("pipewire sources listener"); // we want to get values immediately
 
         stream
     }

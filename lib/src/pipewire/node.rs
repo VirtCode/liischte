@@ -32,6 +32,9 @@ struct NodeTrackerObject {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct NodeState {
+    /// internal pipewire node id
+    pub id: u32,
+
     /// name of the node
     pub name: String,
     /// description (human readable name) of the node
@@ -87,9 +90,19 @@ impl NodeState {
     }
 }
 
-impl Default for NodeState {
-    fn default() -> Self {
-        Self { name: String::new(), description: String::new(), mute: false, volume: Vec::new() }
+impl NodeState {
+    fn new(id: u32) -> Self {
+        Self {
+            id,
+            name: String::new(),
+            description: String::new(),
+            mute: false,
+            volume: Vec::new(),
+        }
+    }
+
+    pub fn average_volume(&self) -> f32 {
+        self.volume.iter().sum::<f32>() / self.volume.len() as f32
     }
 }
 
@@ -152,7 +165,7 @@ impl NodeTracker {
         node.enum_params(0, Some(ParamType::Props), 0, u32::MAX);
         node.subscribe_params(&[ParamType::Props]);
 
-        let mut state = NodeState::default();
+        let mut state = NodeState::new(id);
         state.update_props(props);
 
         debug!("adding node {id} to tracker ('{}')", state.name);
