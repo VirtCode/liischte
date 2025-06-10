@@ -53,6 +53,9 @@ pub struct Config {
     /// looks of the bar
     pub looks: ConfigLooks,
 
+    /// parameters for the osd
+    pub osd: ConfigOsd,
+
     /// config for the main widgets
     pub hyprland: ConfigHyprland,
     pub clock: ConfigClock,
@@ -70,6 +73,7 @@ impl Default for Config {
             namespace: "liischte".to_string(),
             right: false,
             looks: ConfigLooks::default(),
+            osd: ConfigOsd::default(),
             hyprland: ConfigHyprland::default(),
             clock: ConfigClock::default(),
             statuses: vec![
@@ -131,6 +135,12 @@ pub struct ConfigLooks {
     /// semi-transparent color used for separators etc.
     #[serde(deserialize_with = "deserialize_color")]
     pub semi: Color,
+    /// main background color for opaque objects (like osd)
+    #[serde(deserialize_with = "deserialize_color")]
+    pub background: Color,
+    /// border for opaque objects
+    #[serde(deserialize_with = "deserialize_color")]
+    pub border: Color,
 
     /// font to use for text on the bar
     pub font: String,
@@ -146,10 +156,32 @@ impl Default for ConfigLooks {
         Self {
             foreground: color!(0xFFFFFF),
             semi: color!(0xFFFFFF, 0.6),
+            background: color!(0x000000, 0.6),
+            border: color!(0x555555),
             padding: 10,
-            width: 32,
+            width: 40,
             font: "JetBrains Mono".to_string(),
         }
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(default)]
+pub struct ConfigOsd {
+    /// is the osd enabled
+    pub enabled: bool,
+
+    /// how long to show the osd for an event in millis
+    pub timeout: u64,
+
+    /// time the osd hides when respawning in millis
+    /// this is used such that the compositor has time to show an animation
+    pub respawn_time: u64,
+}
+
+impl Default for ConfigOsd {
+    fn default() -> Self {
+        Self { enabled: true, timeout: 4000, respawn_time: 200 }
     }
 }
 

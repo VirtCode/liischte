@@ -100,7 +100,7 @@ impl Status for NetworkStatus {
         Subscription::batch(subs)
     }
 
-    fn update(&mut self, message: &Self::Message) -> Task<Self::Message> {
+    fn update(&mut self, message: &Self::Message) -> (Task<Self::Message>, bool) {
         match message {
             NetworkMessage::PrimaryConnection(primary) => {
                 self.primary_path = primary.clone();
@@ -129,7 +129,7 @@ impl Status for NetworkStatus {
             self.primary = self.active.iter().find(|con| con.path == *primary).cloned();
         }
 
-        Task::none()
+        (Task::none(), false)
     }
 
     fn render(&self) -> Element<'_, Self::Message, Theme, Renderer> {

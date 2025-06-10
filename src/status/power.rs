@@ -136,7 +136,7 @@ impl Status for PowerStatus {
         ])
     }
 
-    fn update(&mut self, message: &Self::Message) -> Task<Self::Message> {
+    fn update(&mut self, message: &Self::Message) -> (Task<Self::Message>, bool) {
         match message {
             PowerStatusMessage::MainsOnlineMessage(online) => {
                 if let Some(ac) = &mut self.mains {
@@ -150,7 +150,7 @@ impl Status for PowerStatus {
             }
         }
 
-        Task::none()
+        (Task::none(), false)
     }
 
     fn render(&self) -> Element<'_, Self::Message, Theme, Renderer> {

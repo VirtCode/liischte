@@ -1,38 +1,48 @@
 #![feature(hasher_prefixfree_extras)]
-use std::{any::TypeId, collections::HashMap};
+use std::{any::TypeId, collections::HashMap, time::Duration};
 
 use clock::{Clock, ClockMessage};
 use config::CONFIG;
 use hyprland::{Hyprland, HyprlandMessage};
 use iced::{
-    Color, Font, Length, Limits, Subscription, Task, Theme,
-    alignment::Horizontal,
-    application,
+    Background, Border, Color, Font, Length, Limits, Radius, Subscription, Task, Theme,
+    alignment::{Horizontal, Vertical},
+    application, color,
     runtime::platform_specific::wayland::layer_surface::{
         IcedMargin, IcedOutput, SctkLayerSurfaceSettings,
     },
-    widget::{Column, column, vertical_space},
+    task::Handle,
+    widget::{Column, Space, column, container::Style, text, vertical_space},
     window::Id as SurfaceId,
 };
 use iced_winit::commands::{
-    layer_surface::get_layer_surface,
+    layer_surface::{destroy_layer_surface, get_layer_surface},
     subsurface::{Anchor, Layer},
 };
+use log::{error, info};
 use lucide_icons::lucide_font_bytes;
 use status::{
     AbstractStatus, StatusMessage,
     audio::{AUDIO_STATUS_IDENTIFIER, AudioStatus},
     power::{POWER_STATUS_IDENTIFIER, PowerStatus},
 };
-use ui::{separator, window::layer_window};
+use tokio::time::sleep;
+use ui::{empty, separator, window::layer_window};
 
-use crate::status::network::{NETWORK_STATUS_IDENTIFIER, NetworkStatus};
+use iced::widget::container as create_container;
+
+use crate::{
+    osd::{OsdHandler, OsdMessage},
+    status::network::{NETWORK_STATUS_IDENTIFIER, NetworkStatus},
+    ui::PILL_RADIUS,
+};
 
 mod clock;
 mod hyprland;
 mod status;
 
 pub mod config;
+mod osd;
 mod ui;
 
 #[tokio::main]
@@ -74,7 +84,57 @@ async fn main() -> iced::Result {
 
     // run iced app with surface
     app.run_with(move || {
-        let surface = get_layer_surface(SctkLayerSurfaceSettings {
+        let task = liischte.init();
+        (liischte, task)
+    })
+}
+
+#[derive(Debug, Clone)]
+enum Message {
+    Clock(ClockMessage),
+    Hyprland(HyprlandMessage),
+    Status(Box<dyn StatusMessage>),
+
+    Osd(OsdMessage),
+}
+
+struct Liischte {
+    clock: Clock,
+    hyprland: Option<Hyprland>,
+    status: HashMap<TypeId, Box<dyn AbstractStatus>>,
+
+    osd: OsdHandler,
+
+    pub surface_bar: SurfaceId,
+}
+
+impl Liischte {
+    pub fn new() -> Self {
+        Self {
+            status: HashMap::new(),
+            clock: Clock::new(),
+            hyprland: None,
+
+            osd: OsdHandler::new(),
+
+            surface_bar: SurfaceId::unique(),
+        }
+    }
+
+    /// set the hyprland instance
+    pub fn set_hyprland(&mut self, hyprland: Hyprland) {
+        self.hyprland = Some(hyprland);
+    }
+
+    /// add a status to the bar
+    pub fn add_status(&mut self, status: Box<dyn AbstractStatus>) {
+        self.status.insert(status.message_type(), status);
+    }
+
+    fn init(&mut self) -> Task<Message> {
+        get_layer_surface(SctkLayerSurfaceSettings {
+            id: self.surface_bar,
+
             layer: Layer::Top,
             anchor: Anchor::TOP
                 | if CONFIG.right { Anchor::RIGHT } else { Anchor::LEFT }
@@ -95,38 +155,7 @@ async fn main() -> iced::Result {
             namespace: CONFIG.namespace.clone(),
 
             ..Default::default()
-        });
-
-        (liischte, surface)
-    })
-}
-
-#[derive(Debug, Clone)]
-enum Message {
-    Clock(ClockMessage),
-    Hyprland(HyprlandMessage),
-    Status(Box<dyn StatusMessage>),
-}
-
-struct Liischte {
-    clock: Clock,
-    hyprland: Option<Hyprland>,
-    status: HashMap<TypeId, Box<dyn AbstractStatus>>,
-}
-
-impl Liischte {
-    pub fn new() -> Self {
-        Self { status: HashMap::new(), clock: Clock::new(), hyprland: None }
-    }
-
-    /// set the hyprland instance
-    pub fn set_hyprland(&mut self, hyprland: Hyprland) {
-        self.hyprland = Some(hyprland);
-    }
-
-    /// add a status to the bar
-    pub fn add_status(&mut self, status: Box<dyn AbstractStatus>) {
-        self.status.insert(status.message_type(), status);
+        })
     }
 
     fn update(&mut self, message: Message) -> Task<Message> {
@@ -139,12 +168,26 @@ impl Liischte {
                 .map(|hl| hl.update(msg).map(Message::Hyprland))
                 .unwrap_or(Task::none()),
 
-            Message::Status(msg) => self
-                .status
-                .get_mut(&(*msg).type_id())
-                .expect("received status message for non-existent status")
-                .update(msg)
-                .map(Message::Status),
+            Message::Status(msg) => {
+                let id = (*msg).type_id();
+
+                let (task, want_osd) = self
+                    .status
+                    .get_mut(&id)
+                    .expect("received status message for non-existent status")
+                    .update(msg);
+
+                if want_osd {
+                    Task::batch(vec![
+                        task.map(Message::Status),
+                        self.osd.request_osd(id).map(Message::Osd),
+                    ])
+                } else {
+                    task.map(Message::Status)
+                }
+            }
+
+            Message::Osd(msg) => self.osd.update(msg).map(Message::Osd),
         }
     }
 
@@ -161,7 +204,18 @@ impl Liischte {
         ])
     }
 
-    fn view(&self, _: SurfaceId) -> iced::Element<'_, Message, Theme, iced::Renderer> {
+    fn view(&self, id: SurfaceId) -> iced::Element<'_, Message, Theme, iced::Renderer> {
+        if id == self.surface_bar {
+            self.view_bar()
+        } else if id == self.osd.surface_osd {
+            self.view_osd()
+        } else {
+            error!("tried to view unknown surface with id `{id}`");
+            column![].into()
+        }
+    }
+
+    fn view_bar(&self) -> iced::Element<'_, Message, Theme, iced::Renderer> {
         column![
             self.hyprland
                 .as_ref()
@@ -178,6 +232,36 @@ impl Liischte {
         .spacing(12)
         .align_x(Horizontal::Center)
         .width(Length::Fill)
+        .into()
+    }
+
+    fn view_osd(&self) -> iced::Element<'_, Message, Theme, iced::Renderer> {
+        let widget: iced::Element<'_, Message, Theme, iced::Renderer> =
+            if let Some(ref id) = self.osd.get_active() {
+                self.status
+                    .get(id)
+                    .expect("tried to show osd from non-existent status")
+                    .render_osd()
+                    .map(Message::Status)
+            } else {
+                empty().into()
+            };
+
+        create_container(
+            create_container(widget)
+                .style(move |_| Style {
+                    background: Some(Background::Color(CONFIG.looks.background)),
+                    border: Border { color: CONFIG.looks.border, width: 1f32, radius: PILL_RADIUS },
+                    ..Default::default()
+                })
+                .width(CONFIG.looks.width as f32)
+                .align_x(Horizontal::Center)
+                .align_y(Vertical::Center),
+        )
+        .height(Length::Fill)
+        .width(Length::Fill)
+        .align_x(Horizontal::Center)
+        .align_y(Vertical::Center)
         .into()
     }
 }

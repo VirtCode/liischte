@@ -1,22 +1,27 @@
 use std::{hash::Hasher as _, sync::Arc};
 
 use iced::{
-    Element, Renderer, Subscription, Task, Theme,
+    Element, Padding, Renderer, Subscription, Task, Theme,
     advanced::subscription::{EventStream, Hasher, Recipe, from_recipe},
+    alignment::Horizontal,
     mouse::ScrollDelta,
-    widget::mouse_area,
+    widget::{column, mouse_area, vertical_slider},
 };
 use iced_winit::futures::BoxStream;
 use liischte_lib::{
     StreamContext,
     pipewire::{PipewireInstance, default::DefaultState, node::NodeState},
 };
-use log::debug;
+use log::{debug, info};
 use lucide_icons::Icon;
 
 use crate::{
+    config::CONFIG,
     status::{Status, StatusMessage},
-    ui::icon,
+    ui::{
+        icon,
+        progress::{VerticalProgress, vertical_progress},
+    },
 };
 
 pub const AUDIO_STATUS_IDENTIFIER: &str = "audio";
@@ -63,7 +68,7 @@ impl Status for AudioStatus {
         ])
     }
 
-    fn update(&mut self, message: &Self::Message) -> Task<Self::Message> {
+    fn update(&mut self, message: &Self::Message) -> (Task<Self::Message>, bool) {
         match (message, &self.selected) {
             (AudioMessage::DefaultState(defaults), _) => self.defaults = defaults.clone(),
             (AudioMessage::SinkState(nodes), _) => self.sinks = nodes.clone(),
@@ -83,9 +88,11 @@ impl Status for AudioStatus {
             _ => {}
         };
 
-        self.selected = self.sinks.iter().find(|sink| sink.name == self.defaults.sink).cloned();
+        let new = self.sinks.iter().find(|sink| sink.name == self.defaults.sink).cloned();
+        let changed = new != self.selected;
+        self.selected = new;
 
-        Task::none()
+        (Task::none(), changed)
     }
 
     fn render(&self) -> Element<'_, Self::Message, Theme, Renderer> {
@@ -114,6 +121,23 @@ impl Status for AudioStatus {
                 }
             })
             .on_release(AudioMessage::ToggleMute)
+            .into()
+    }
+
+    fn render_osd(&self) -> Element<'_, Self::Message, Theme, Renderer> {
+        let (volume, symbol) = if let Some(sink) = self.selected.as_ref() {
+            (
+                sink.volume.iter().sum::<f32>() / sink.volume.len() as f32,
+                if sink.mute { Icon::VolumeX } else { Icon::Volume2 },
+            )
+        } else {
+            (0f32, Icon::VolumeOff)
+        };
+
+        column![vertical_progress(volume, 100f32, 4f32, 6f32), icon(symbol).size(20)]
+            .padding(Padding::ZERO.top(CONFIG.looks.width as f32 / 2f32 - 2f32).bottom(8))
+            .spacing(8)
+            .align_x(Horizontal::Center)
             .into()
     }
 }

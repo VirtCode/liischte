@@ -30,7 +30,7 @@ struct NodeTrackerObject {
     state: NodeState,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct NodeState {
     /// name of the node
     pub name: String,
