@@ -15,18 +15,18 @@ use liischte_lib::{
 use log::{debug, info};
 use lucide_icons::Icon;
 
+use super::{Module, ModuleMessage};
 use crate::{
     config::CONFIG,
-    status::{Status, StatusMessage},
     ui::{
         icon,
         progress::{VerticalProgress, vertical_progress},
     },
 };
 
-pub const AUDIO_STATUS_IDENTIFIER: &str = "audio";
+pub const AUDIO_MODULE_IDENTIFIER: &str = "audio";
 
-impl StatusMessage for AudioMessage {}
+impl ModuleMessage for AudioMessage {}
 #[derive(Clone, Debug)]
 pub enum AudioMessage {
     DefaultState(DefaultState),
@@ -38,7 +38,7 @@ pub enum AudioMessage {
     Ok,
 }
 
-pub struct AudioStatus {
+pub struct AudioModule {
     pipewire: Arc<PipewireInstance>, // this is an arc to implement efficient subscriptions
 
     defaults: DefaultState,
@@ -47,7 +47,7 @@ pub struct AudioStatus {
     selected: Option<NodeState>,
 }
 
-impl AudioStatus {
+impl AudioModule {
     pub fn new() -> Self {
         Self {
             pipewire: Arc::new(PipewireInstance::start()),
@@ -58,7 +58,7 @@ impl AudioStatus {
     }
 }
 
-impl Status for AudioStatus {
+impl Module for AudioModule {
     type Message = AudioMessage;
 
     fn subscribe(&self) -> Subscription<Self::Message> {
@@ -95,7 +95,7 @@ impl Status for AudioStatus {
         (Task::none(), changed)
     }
 
-    fn render(&self) -> Element<'_, Self::Message, Theme, Renderer> {
+    fn render_status(&self) -> Element<'_, Self::Message, Theme, Renderer> {
         let Some(sink) = self.selected.as_ref() else {
             return icon(Icon::VolumeOff).into();
         };

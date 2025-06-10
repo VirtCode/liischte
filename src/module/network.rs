@@ -14,22 +14,19 @@ use log::{debug, trace};
 use lucide_icons::Icon;
 use serde::Deserialize;
 
-use crate::{
-    config::CONFIG,
-    status::{Status, StatusMessage},
-    ui::icon,
-};
+use super::{Module, ModuleMessage};
+use crate::{config::CONFIG, ui::icon};
 
-pub const NETWORK_STATUS_IDENTIFIER: &str = "network";
+pub const NETWORK_MODULE_IDENTIFIER: &str = "network";
 
 #[derive(Deserialize, Default)]
 #[serde(default)]
-struct NetworkStatusConfig {
+struct NetworkModuleConfig {
     /// enable modem manager support
     modem: bool,
 }
 
-impl StatusMessage for NetworkMessage {}
+impl ModuleMessage for NetworkMessage {}
 #[derive(Clone, Debug)]
 pub enum NetworkMessage {
     PrimaryConnection(Option<OwnedObjectPath>),
@@ -39,8 +36,8 @@ pub enum NetworkMessage {
     CellularStrength(f64),
 }
 
-pub struct NetworkStatus {
-    config: NetworkStatusConfig,
+pub struct NewtorkModule {
+    config: NetworkModuleConfig,
     nm: NetworkManager,
 
     active: Vec<ActiveConnection>,
@@ -52,10 +49,10 @@ pub struct NetworkStatus {
     cellular_strength: f64,
 }
 
-impl NetworkStatus {
+impl NewtorkModule {
     pub async fn new() -> Result<Self> {
         Ok(Self {
-            config: CONFIG.status(NETWORK_STATUS_IDENTIFIER),
+            config: CONFIG.module(NETWORK_MODULE_IDENTIFIER),
             nm: NetworkManager::connnect().await.context("could not connect to system bus")?,
 
             active: vec![],
@@ -68,7 +65,7 @@ impl NetworkStatus {
     }
 }
 
-impl Status for NetworkStatus {
+impl Module for NewtorkModule {
     type Message = NetworkMessage;
 
     fn subscribe(&self) -> Subscription<Self::Message> {
@@ -132,7 +129,7 @@ impl Status for NetworkStatus {
         (Task::none(), false)
     }
 
-    fn render(&self) -> Element<'_, Self::Message, Theme, Renderer> {
+    fn render_status(&self) -> Element<'_, Self::Message, Theme, Renderer> {
         let Some(ref primary) = self.primary else { return icon(Icon::Ban).into() };
 
         let symbol = match primary.kind {

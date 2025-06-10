@@ -16,13 +16,13 @@ use serde::Deserialize;
 
 use crate::{config::CONFIG, ui::icon};
 
-use super::{Status, StatusMessage};
+use super::{Module, ModuleMessage};
 
-pub const POWER_STATUS_IDENTIFIER: &str = "power";
+pub const POWER_MODULE_IDENTIFIER: &str = "power";
 
 #[derive(Deserialize)]
 #[serde(default)]
-struct PowerStatusConfig {
+struct PowerModuleConfig {
     /// force the use of a specific mains supply
     mains: Option<String>,
     /// force the use of a specific set of batteries
@@ -35,13 +35,13 @@ struct PowerStatusConfig {
     critical: f64,
 }
 
-impl Default for PowerStatusConfig {
+impl Default for PowerModuleConfig {
     fn default() -> Self {
         Self { mains: None, batteries: vec![], polling_rate: 30, critical: 0.1 }
     }
 }
 
-impl StatusMessage for PowerStatusMessage {}
+impl ModuleMessage for PowerStatusMessage {}
 #[derive(Clone, Debug)]
 pub enum PowerStatusMessage {
     MainsOnlineMessage(bool),
@@ -59,16 +59,16 @@ struct Battery {
     charge: f64,
 }
 
-pub struct PowerStatus {
-    config: PowerStatusConfig,
+pub struct PowerModule {
+    config: PowerModuleConfig,
 
     mains: Option<Mains>,
     batteries: Vec<Battery>,
 }
 
-impl PowerStatus {
+impl PowerModule {
     pub async fn new() -> Result<Self> {
-        let config: PowerStatusConfig = CONFIG.status(POWER_STATUS_IDENTIFIER);
+        let config: PowerModuleConfig = CONFIG.module(POWER_MODULE_IDENTIFIER);
 
         info!("reading available power devices from sysfs");
         let mut mains = None;
@@ -113,7 +113,7 @@ impl PowerStatus {
 }
 
 #[async_trait]
-impl Status for PowerStatus {
+impl Module for PowerModule {
     type Message = PowerStatusMessage;
 
     fn subscribe(&self) -> Subscription<Self::Message> {
@@ -153,7 +153,7 @@ impl Status for PowerStatus {
         (Task::none(), false)
     }
 
-    fn render(&self) -> Element<'_, Self::Message, Theme, Renderer> {
+    fn render_status(&self) -> Element<'_, Self::Message, Theme, Renderer> {
         if self.mains.as_ref().map(|ac| ac.online).unwrap_or_default() {
             icon(Icon::BatteryCharging).into()
         } else {

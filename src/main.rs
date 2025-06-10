@@ -21,10 +21,11 @@ use iced_winit::commands::{
 };
 use log::{error, info};
 use lucide_icons::lucide_font_bytes;
-use status::{
-    AbstractStatus, StatusMessage,
-    audio::{AUDIO_STATUS_IDENTIFIER, AudioStatus},
-    power::{POWER_STATUS_IDENTIFIER, PowerStatus},
+use module::{
+    AbstractModule, ModuleMessage,
+    audio::{AUDIO_MODULE_IDENTIFIER, AudioModule},
+    network::{NETWORK_MODULE_IDENTIFIER, NewtorkModule},
+    power::{POWER_MODULE_IDENTIFIER, PowerModule},
 };
 use tokio::time::sleep;
 use ui::{empty, separator, window::layer_window};
@@ -33,13 +34,12 @@ use iced::widget::container as create_container;
 
 use crate::{
     osd::{OsdHandler, OsdMessage},
-    status::network::{NETWORK_STATUS_IDENTIFIER, NetworkStatus},
     ui::PILL_RADIUS,
 };
 
 mod clock;
 mod hyprland;
-mod status;
+mod module;
 
 pub mod config;
 mod osd;
@@ -73,11 +73,11 @@ async fn main() -> iced::Result {
         liischte.set_hyprland(Hyprland::new().await.unwrap());
     }
 
-    for status in &CONFIG.statuses {
+    for status in &CONFIG.modules {
         liischte.add_status(match status.as_str() {
-            POWER_STATUS_IDENTIFIER => Box::new(PowerStatus::new().await.unwrap()),
-            NETWORK_STATUS_IDENTIFIER => Box::new(NetworkStatus::new().await.unwrap()),
-            AUDIO_STATUS_IDENTIFIER => Box::new(AudioStatus::new()),
+            POWER_MODULE_IDENTIFIER => Box::new(PowerModule::new().await.unwrap()),
+            NETWORK_MODULE_IDENTIFIER => Box::new(NewtorkModule::new().await.unwrap()),
+            AUDIO_MODULE_IDENTIFIER => Box::new(AudioModule::new()),
             status => panic!("status `{status}` does not exist in this version"),
         });
     }
@@ -93,7 +93,7 @@ async fn main() -> iced::Result {
 enum Message {
     Clock(ClockMessage),
     Hyprland(HyprlandMessage),
-    Status(Box<dyn StatusMessage>),
+    Status(Box<dyn ModuleMessage>),
 
     Osd(OsdMessage),
 }
@@ -101,9 +101,9 @@ enum Message {
 struct Liischte {
     clock: Clock,
     hyprland: Option<Hyprland>,
-    status: HashMap<TypeId, Box<dyn AbstractStatus>>,
+    modules: HashMap<TypeId, Box<dyn AbstractModule>>,
 
-    osd: OsdHandler,
+    osd: Option<OsdHandler>,
 
     pub surface_bar: SurfaceId,
 }
@@ -111,11 +111,11 @@ struct Liischte {
 impl Liischte {
     pub fn new() -> Self {
         Self {
-            status: HashMap::new(),
+            modules: HashMap::new(),
             clock: Clock::new(),
             hyprland: None,
 
-            osd: OsdHandler::new(),
+            osd: if CONFIG.osd.enabled { Some(OsdHandler::new()) } else { None },
 
             surface_bar: SurfaceId::unique(),
         }
@@ -127,8 +127,8 @@ impl Liischte {
     }
 
     /// add a status to the bar
-    pub fn add_status(&mut self, status: Box<dyn AbstractStatus>) {
-        self.status.insert(status.message_type(), status);
+    pub fn add_status(&mut self, status: Box<dyn AbstractModule>) {
+        self.modules.insert(status.message_type(), status);
     }
 
     fn init(&mut self) -> Task<Message> {
@@ -172,22 +172,27 @@ impl Liischte {
                 let id = (*msg).type_id();
 
                 let (task, want_osd) = self
-                    .status
+                    .modules
                     .get_mut(&id)
                     .expect("received status message for non-existent status")
                     .update(msg);
 
-                if want_osd {
+                if want_osd && let Some(osd) = &mut self.osd {
                     Task::batch(vec![
                         task.map(Message::Status),
-                        self.osd.request_osd(id).map(Message::Osd),
+                        osd.request_osd(id).map(Message::Osd),
                     ])
                 } else {
                     task.map(Message::Status)
                 }
             }
 
-            Message::Osd(msg) => self.osd.update(msg).map(Message::Osd),
+            Message::Osd(msg) => self
+                .osd
+                .as_mut()
+                .expect("received osd without it enabled")
+                .update(msg)
+                .map(Message::Osd),
         }
     }
 
@@ -199,7 +204,7 @@ impl Liischte {
                 .map(|hl| hl.subscribe().map(Message::Hyprland))
                 .unwrap_or(Subscription::none()),
             Subscription::batch(
-                self.status.values().map(|status| status.subscribe().map(Message::Status)),
+                self.modules.values().map(|status| status.subscribe().map(Message::Status)),
             ),
         ])
     }
@@ -207,11 +212,13 @@ impl Liischte {
     fn view(&self, id: SurfaceId) -> iced::Element<'_, Message, Theme, iced::Renderer> {
         if id == self.surface_bar {
             self.view_bar()
-        } else if id == self.osd.surface_osd {
+        } else if let Some(osd) = &self.osd
+            && id == osd.surface_osd
+        {
             self.view_osd()
         } else {
             error!("tried to view unknown surface with id `{id}`");
-            column![].into()
+            empty().into()
         }
     }
 
@@ -223,7 +230,7 @@ impl Liischte {
                 .unwrap_or_else(|| column![].into()),
             vertical_space(),
             Column::from_iter(
-                self.status.values().map(|status| status.render().map(Message::Status)),
+                self.modules.values().map(|status| status.render_status().map(Message::Status)),
             )
             .spacing(4),
             separator(),
@@ -236,16 +243,17 @@ impl Liischte {
     }
 
     fn view_osd(&self) -> iced::Element<'_, Message, Theme, iced::Renderer> {
-        let widget: iced::Element<'_, Message, Theme, iced::Renderer> =
-            if let Some(ref id) = self.osd.get_active() {
-                self.status
-                    .get(id)
-                    .expect("tried to show osd from non-existent status")
-                    .render_osd()
-                    .map(Message::Status)
-            } else {
-                empty().into()
-            };
+        let widget: iced::Element<'_, Message, Theme, iced::Renderer> = if let Some(ref id) =
+            self.osd.as_ref().expect("rendering osd without enabled").get_active()
+        {
+            self.modules
+                .get(id)
+                .expect("tried to show osd from non-existent status")
+                .render_osd()
+                .map(Message::Status)
+        } else {
+            empty().into()
+        };
 
         create_container(
             create_container(widget)

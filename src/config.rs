@@ -13,9 +13,9 @@ use log::{debug, error, info};
 use serde::{Deserialize, Deserializer};
 use toml::Table;
 
-use crate::status::{
-    audio::AUDIO_STATUS_IDENTIFIER, network::NETWORK_STATUS_IDENTIFIER,
-    power::POWER_STATUS_IDENTIFIER,
+use crate::module::{
+    audio::AUDIO_MODULE_IDENTIFIER, network::NETWORK_MODULE_IDENTIFIER,
+    power::POWER_MODULE_IDENTIFIER,
 };
 
 /// deserializes a color from a toml string
@@ -60,11 +60,11 @@ pub struct Config {
     pub hyprland: ConfigHyprland,
     pub clock: ConfigClock,
 
-    /// which status are enabled
-    pub statuses: Vec<String>,
+    /// which modules are enabled
+    pub modules: Vec<String>,
 
-    /// config for statuses
-    status: HashMap<String, Table>,
+    /// config for modules
+    module: HashMap<String, Table>,
 }
 
 impl Default for Config {
@@ -76,12 +76,12 @@ impl Default for Config {
             osd: ConfigOsd::default(),
             hyprland: ConfigHyprland::default(),
             clock: ConfigClock::default(),
-            statuses: vec![
-                POWER_STATUS_IDENTIFIER.to_string(),
-                AUDIO_STATUS_IDENTIFIER.to_string(),
-                NETWORK_STATUS_IDENTIFIER.to_string(),
+            modules: vec![
+                POWER_MODULE_IDENTIFIER.to_string(),
+                AUDIO_MODULE_IDENTIFIER.to_string(),
+                NETWORK_MODULE_IDENTIFIER.to_string(),
             ],
-            status: HashMap::default(),
+            module: HashMap::default(),
         }
     }
 }
@@ -108,11 +108,11 @@ impl Config {
         ))
     }
 
-    pub fn status<'de, T>(&self, name: &str) -> T
+    pub fn module<'de, T>(&self, name: &str) -> T
     where
         T: Deserialize<'de> + Default,
     {
-        if let Some(config) = self.status.get(name) {
+        if let Some(config) = self.module.get(name) {
             Table::try_into(config.clone())
                 .with_context(|| format!("cannot deserialize status config for `{name}`"))
                 .map_err(|e| {
