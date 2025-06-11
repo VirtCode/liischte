@@ -1,14 +1,13 @@
+use crate::{config::CONFIG, ui::PILL_RADIUS};
 use iced::{
-    Background, Border, Color, Element, Event, Length, Radius, Rectangle, Size,
+    Background, Border, Color, Element, Length, Rectangle, Size,
     core::{
-        self, Clipboard, Layout, Shell, Widget, event,
+        self, Layout, Widget,
         layout::{self, Node},
         mouse, renderer,
-        widget::{Tree, tree},
+        widget::Tree,
     },
 };
-
-use crate::{config::CONFIG, ui::PILL_RADIUS};
 
 /// creates a vertical progress bar, takes a value between 0 and 1
 pub fn vertical_progress(value: f32, height: f32, inner: f32, outer: f32) -> VerticalProgress {

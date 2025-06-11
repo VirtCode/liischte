@@ -1,11 +1,12 @@
 use iced::{
-    Font, Radius, color,
-    widget::{Column, Rule, Space, Text, column, horizontal_rule, rule, text},
+    Font, Radius,
+    widget::{Rule, Space, Text, horizontal_rule, rule, text},
 };
 use lucide_icons::Icon;
 
 use crate::config::CONFIG;
 
+pub mod outputs;
 pub mod progress;
 pub mod window;
 
@@ -19,12 +20,14 @@ pub const PILL_RADIUS: Radius = Radius {
 
 /// creates a separator for the bar
 pub fn separator<'a>() -> Rule<'a> {
-    horizontal_rule(2).style(|_| rule::Style {
-        color: CONFIG.looks.semi,
-        width: 2,
-        fill_mode: rule::FillMode::Full,
-        radius: Radius::new(2),
-    })
+    horizontal_rule(2)
+        .style(|_| rule::Style {
+            color: CONFIG.looks.semi,
+            width: 2,
+            fill_mode: rule::FillMode::Full,
+            radius: Radius::new(2),
+        })
+        .width(32)
 }
 
 /// creates an icon with the lucide icon font

@@ -12,7 +12,7 @@ use iced_winit::commands::{
     layer_surface::{destroy_layer_surface, get_layer_surface},
     subsurface::{Anchor, Layer},
 };
-use log::{debug, info};
+use log::debug;
 use tokio::time::sleep;
 
 use crate::{config::CONFIG, module::ModuleId};
@@ -28,6 +28,7 @@ pub struct OsdHandler {
     timeout: Option<Handle>,
     respawning: bool,
 
+    pub output: Option<IcedOutput>,
     pub surface: Id,
 }
 
@@ -40,7 +41,14 @@ pub enum OsdMessage {
 impl OsdHandler {
     /// create a new handler
     pub fn new() -> Self {
-        Self { current: None, last: None, timeout: None, respawning: false, surface: Id::unique() }
+        Self {
+            current: None,
+            last: None,
+            timeout: None,
+            respawning: false,
+            surface: Id::unique(),
+            output: None,
+        }
     }
 
     /// update the inner state based on a message
@@ -115,17 +123,20 @@ impl OsdHandler {
         destroy_layer_surface(self.surface)
     }
 
-    fn create_surface(&self) -> Task<OsdMessage> {
-        //return Task::none();
+    fn create_surface(&mut self) -> Task<OsdMessage> {
+        let Some(output) = self.output.clone() else {
+            self.current = None;
+            return Task::none();
+        };
 
         get_layer_surface(SctkLayerSurfaceSettings {
+            output,
             id: self.surface,
 
             layer: Layer::Overlay,
             anchor: Anchor::TOP
                 | if CONFIG.right { Anchor::RIGHT } else { Anchor::LEFT }
                 | Anchor::BOTTOM,
-            output: IcedOutput::Active,
 
             margin: IcedMargin {
                 bottom: CONFIG.looks.padding as i32,

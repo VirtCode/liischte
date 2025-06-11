@@ -1,22 +1,21 @@
 #![feature(hasher_prefixfree_extras)]
-use std::{collections::HashMap, time::Duration};
+use std::collections::HashMap;
 
 use clock::{Clock, ClockMessage};
 use config::CONFIG;
 use hyprland::{Hyprland, HyprlandMessage};
 use iced::{
-    Background, Border, Color, Font, Length, Limits, Radius, Subscription, Task, Theme,
+    Background, Border, Color, Font, Length, Limits, Padding, Subscription, Task, Theme,
     alignment::{Horizontal, Vertical},
-    application, color,
+    application,
     runtime::platform_specific::wayland::layer_surface::{
         IcedMargin, IcedOutput, SctkLayerSurfaceSettings,
     },
-    task::Handle,
-    widget::{Column, Space, column, container::Style, text, vertical_space},
+    widget::{Column, column, container::Style, vertical_space},
     window::Id as SurfaceId,
 };
 use iced_winit::commands::{
-    layer_surface::{destroy_layer_surface, get_layer_surface},
+    layer_surface::get_layer_surface,
     subsurface::{Anchor, Layer},
 };
 use log::{error, info};
@@ -27,11 +26,11 @@ use module::{
     network::{NETWORK_MODULE_IDENTIFIER, NewtorkModule},
     power::{POWER_MODULE_IDENTIFIER, PowerModule},
 };
-use tokio::time::sleep;
 use ui::{empty, separator, window::layer_window};
 
 use iced::widget::container as create_container;
 
+use crate::ui::outputs::{OutputHandler, OutputMessage};
 use crate::{
     module::ModuleId,
     osd::{OsdHandler, OsdMessage},
@@ -84,10 +83,7 @@ async fn main() -> iced::Result {
     }
 
     // run iced app with surface
-    app.run_with(move || {
-        let task = liischte.init();
-        (liischte, task)
-    })
+    app.run_with(move || (liischte, Task::none()))
 }
 
 #[derive(Debug, Clone)]
@@ -97,6 +93,7 @@ enum Message {
     Status(Box<dyn ModuleMessage>),
 
     Osd(OsdMessage),
+    Output(OutputMessage),
 }
 
 struct Liischte {
@@ -106,6 +103,8 @@ struct Liischte {
 
     osd: Option<OsdHandler>,
 
+    outputs: OutputHandler,
+    alive: bool, // whether the surface is alive
     pub surface: SurfaceId,
 }
 
@@ -118,6 +117,8 @@ impl Liischte {
 
             osd: if CONFIG.osd.enabled { Some(OsdHandler::new()) } else { None },
 
+            outputs: OutputHandler::new(),
+            alive: false,
             surface: SurfaceId::unique(),
         }
     }
@@ -132,15 +133,22 @@ impl Liischte {
         self.modules.insert(status.message_type(), status);
     }
 
-    fn init(&mut self) -> Task<Message> {
+    fn open(&mut self, output: IcedOutput) -> Task<Message> {
+        info!("opening bar layer surface");
+        self.alive = true;
+
+        if let Some(ref mut osd) = self.osd {
+            osd.output = Some(output.clone());
+        }
+
         get_layer_surface(SctkLayerSurfaceSettings {
+            output,
             id: self.surface,
 
             layer: Layer::Top,
             anchor: Anchor::TOP
                 | if CONFIG.right { Anchor::RIGHT } else { Anchor::LEFT }
                 | Anchor::BOTTOM,
-            output: IcedOutput::Active,
 
             margin: IcedMargin {
                 bottom: CONFIG.looks.padding as i32,
@@ -196,6 +204,18 @@ impl Liischte {
                 .expect("received osd without it enabled")
                 .update(msg)
                 .map(Message::Osd),
+
+            Message::Output(msg) => {
+                self.outputs.update(msg);
+
+                if !self.alive
+                    && let Some(output) = self.outputs.get_configured()
+                {
+                    self.open(output)
+                } else {
+                    Task::none()
+                }
+            }
         }
     }
 
@@ -209,6 +229,7 @@ impl Liischte {
             Subscription::batch(
                 self.modules.values().map(|status| status.subscribe().map(Message::Status)),
             ),
+            self.outputs.subscribe().map(Message::Output),
         ])
     }
 
@@ -242,6 +263,7 @@ impl Liischte {
             separator(),
             self.clock.render().map(Message::Clock)
         ]
+        .padding(Padding::ZERO.top(10).bottom(5)) // gives some visual balance
         .spacing(12)
         .align_x(Horizontal::Center)
         .width(Length::Fill)

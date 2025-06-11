@@ -2,7 +2,7 @@ use std::{hash::Hasher, time::Duration};
 
 use anyhow::{Context, Result};
 use async_trait::async_trait;
-use futures::{FutureExt, StreamExt, stream};
+use futures::{StreamExt, stream};
 use iced::{
     Background, Color, Element, Length, Renderer, Subscription, Task, Theme,
     advanced::subscription::{EventStream, Recipe, from_recipe},

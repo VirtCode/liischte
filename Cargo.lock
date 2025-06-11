@@ -2000,6 +2000,7 @@ dependencies = [
  "serde",
  "tokio",
  "toml",
+ "wayland-client",
 ]
 
 [[package]]

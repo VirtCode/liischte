@@ -1,12 +1,12 @@
 use std::{any::TypeId, fmt::Debug};
 
 use async_trait::async_trait;
-use downcast::{Any, Downcast, downcast};
+use downcast::{Any, downcast};
 use dyn_clone::{DynClone, clone_trait_object};
-use iced::{Element, Renderer, Subscription, Task, Theme, widget::Space};
+use iced::{Element, Renderer, Subscription, Task, Theme};
 use log::trace;
 
-use crate::{osd::OsdId, ui::empty};
+use crate::osd::OsdId;
 
 pub mod audio;
 pub mod network;

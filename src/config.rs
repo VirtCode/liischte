@@ -49,6 +49,8 @@ pub struct Config {
     pub namespace: String,
     /// whether to show the bar on the left instead of the right
     pub right: bool,
+    /// output to show the bar on
+    pub output: String,
 
     /// looks of the bar
     pub looks: ConfigLooks,
@@ -72,6 +74,7 @@ impl Default for Config {
         Self {
             namespace: "liischte".to_string(),
             right: false,
+            output: "active".to_string(),
             looks: ConfigLooks::default(),
             osd: ConfigOsd::default(),
             hyprland: ConfigHyprland::default(),
