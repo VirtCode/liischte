@@ -92,12 +92,17 @@ impl Default for Config {
 impl Config {
     /// reads the config from the file system
     pub fn read() -> Result<Option<Self>> {
-        let path = env::var("XDG_CONFIG_HOME")
-            .map(|config| PathBuf::from(config).join("liischte.toml"))
+        let path = env::var("LIISCHTE_CONFIG")
+            .map(PathBuf::from)
             .or_else(|_| {
-                env::var("HOME").map(|home| PathBuf::from(home).join(".config/liischte.toml"))
+                env::var("XDG_CONFIG_HOME")
+                    .map(|config| PathBuf::from(config).join("liischte.toml"))
+                    .or_else(|_| {
+                        env::var("HOME")
+                            .map(|home| PathBuf::from(home).join(".config/liischte.toml"))
+                    })
             })
-            .context("$XDG_CONFIG_HOME and $HOME are both not defined, can't read config")?;
+            .context("$LIISCHTE_CONFIG, $XDG_CONFIG_HOME and $HOME are all not defined, can't read config")?;
 
         if !path.exists() {
             return Ok(None);

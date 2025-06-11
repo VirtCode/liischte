@@ -18,6 +18,7 @@ use iced_winit::commands::{
     layer_surface::get_layer_surface,
     subsurface::{Anchor, Layer},
 };
+use indexmap::IndexMap;
 use log::{error, info};
 use lucide_icons::lucide_font_bytes;
 use module::{
@@ -73,8 +74,8 @@ async fn main() -> iced::Result {
         liischte.set_hyprland(Hyprland::new().await.unwrap());
     }
 
-    for status in &CONFIG.modules {
-        liischte.add_status(match status.as_str() {
+    for status in CONFIG.modules.iter().rev() {
+        liischte.add_module(match status.as_str() {
             POWER_MODULE_IDENTIFIER => Box::new(PowerModule::new().await.unwrap()),
             NETWORK_MODULE_IDENTIFIER => Box::new(NewtorkModule::new().await.unwrap()),
             AUDIO_MODULE_IDENTIFIER => Box::new(AudioModule::new()),
@@ -99,7 +100,7 @@ enum Message {
 struct Liischte {
     clock: Clock,
     hyprland: Option<Hyprland>,
-    modules: HashMap<ModuleId, Box<dyn AbstractModule>>,
+    modules: IndexMap<ModuleId, Box<dyn AbstractModule>>,
 
     osd: Option<OsdHandler>,
 
@@ -111,7 +112,7 @@ struct Liischte {
 impl Liischte {
     pub fn new() -> Self {
         Self {
-            modules: HashMap::new(),
+            modules: IndexMap::new(),
             clock: Clock::new(),
             hyprland: None,
 
@@ -129,7 +130,7 @@ impl Liischte {
     }
 
     /// add a status to the bar
-    pub fn add_status(&mut self, status: Box<dyn AbstractModule>) {
+    pub fn add_module(&mut self, status: Box<dyn AbstractModule>) {
         self.modules.insert(status.message_type(), status);
     }
 
