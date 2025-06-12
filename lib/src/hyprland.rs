@@ -15,7 +15,7 @@ use crate::{StaticStream, StreamContext, util::StreamCustomExt};
 pub struct WorkspaceState {
     pub id: i64,
     #[serde(rename = "monitorID")]
-    pub monitor_id: u64,
+    pub monitor_id: Option<u64>,
     #[serde(rename = "windows")]
     pub window_amount: u64,
     #[serde(rename = "hasfullscreen")]
@@ -132,7 +132,7 @@ impl HyprlandInstance {
         ];
 
         let mut workspaces = self.get_all_workspaces().await?;
-        workspaces.retain(|state| state.monitor_id == monitor_id && state.id >= 0);
+        workspaces.retain(|state| state.monitor_id == Some(monitor_id) && state.id >= 0);
 
         let active = self.get_active_workspace().await?;
 
@@ -157,7 +157,9 @@ impl HyprlandInstance {
                                 params.0.get_all_workspaces().await.stream_log("hl workspaces")?;
 
                             // remove workspaces on other monitors and ignore special ones
-                            state.retain(|state| state.monitor_id == params.1 && state.id >= 0);
+                            state.retain(|state| {
+                                state.monitor_id == Some(params.1) && state.id >= 0
+                            });
                         }
 
                         // this event does not tell us anything, we don't do anything

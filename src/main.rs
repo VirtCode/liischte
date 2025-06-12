@@ -1,6 +1,4 @@
 #![feature(hasher_prefixfree_extras)]
-use std::collections::HashMap;
-
 use clock::{Clock, ClockMessage};
 use config::CONFIG;
 use hyprland::{Hyprland, HyprlandMessage};

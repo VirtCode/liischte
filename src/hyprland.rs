@@ -44,7 +44,7 @@ impl Hyprland {
         let selected = instance.get_active_workspace().await?.id;
 
         let mut workspaces = instance.get_all_workspaces().await?;
-        workspaces.retain(|state| state.monitor_id == config.monitor && state.id >= 0);
+        workspaces.retain(|state| state.monitor_id == Some(config.monitor) && state.id >= 0);
 
         Ok(Self { config, instance, selected, workspaces })
     }
