@@ -24,6 +24,7 @@ use module::{
     audio::{AUDIO_MODULE_IDENTIFIER, AudioModule},
     network::{NETWORK_MODULE_IDENTIFIER, NewtorkModule},
     power::{POWER_MODULE_IDENTIFIER, PowerModule},
+    process::{PROCESS_MODULE_IDENTIFIER, ProcessModule},
 };
 use ui::{empty, separator, window::layer_window};
 
@@ -76,6 +77,7 @@ async fn main() -> iced::Result {
         liischte.add_module(match status.as_str() {
             POWER_MODULE_IDENTIFIER => Box::new(PowerModule::new().await.unwrap()),
             NETWORK_MODULE_IDENTIFIER => Box::new(NewtorkModule::new().await.unwrap()),
+            PROCESS_MODULE_IDENTIFIER => Box::new(ProcessModule::new().unwrap()),
             AUDIO_MODULE_IDENTIFIER => Box::new(AudioModule::new()),
             status => panic!("status `{status}` does not exist in this version"),
         });
@@ -89,7 +91,7 @@ async fn main() -> iced::Result {
 enum Message {
     Clock(ClockMessage),
     Hyprland(HyprlandMessage),
-    Status(Box<dyn ModuleMessage>),
+    Module(Box<dyn ModuleMessage>),
 
     Osd(OsdMessage),
     Output(OutputMessage),
@@ -176,7 +178,7 @@ impl Liischte {
                 .map(|hl| hl.update(msg).map(Message::Hyprland))
                 .unwrap_or(Task::none()),
 
-            Message::Status(msg) => {
+            Message::Module(msg) => {
                 let id = (*msg).type_id();
 
                 let (task, osd) = self
@@ -189,11 +191,11 @@ impl Liischte {
                     && let Some(osd) = &mut self.osd
                 {
                     Task::batch(vec![
-                        task.map(Message::Status),
+                        task.map(Message::Module),
                         osd.request_osd(id, osd_id).map(Message::Osd),
                     ])
                 } else {
-                    task.map(Message::Status)
+                    task.map(Message::Module)
                 }
             }
 
@@ -226,7 +228,7 @@ impl Liischte {
                 .map(|hl| hl.subscribe().map(Message::Hyprland))
                 .unwrap_or(Subscription::none()),
             Subscription::batch(
-                self.modules.values().map(|status| status.subscribe().map(Message::Status)),
+                self.modules.values().map(|status| status.subscribe().map(Message::Module)),
             ),
             self.outputs.subscribe().map(Message::Output),
         ])
@@ -246,20 +248,30 @@ impl Liischte {
     }
 
     fn view_bar(&self) -> iced::Element<'_, Message, Theme, iced::Renderer> {
+        let mut infos = self
+            .modules
+            .values()
+            .flat_map(|module| module.render_info().into_iter())
+            .map(|info| info.map(Message::Module))
+            .peekable();
+        let has_infos = infos.peek().is_some();
+
+        let status = self
+            .modules
+            .values()
+            .filter(|module| module.has_status())
+            .map(|module| module.render_status().map(Message::Module));
+
         column![
             self.hyprland
                 .as_ref()
                 .map(|hl| hl.render().map(Message::Hyprland))
                 .unwrap_or_else(|| column![].into()),
             vertical_space(),
-            Column::from_iter(
-                self.modules
-                    .values()
-                    .filter(|module| module.has_status())
-                    .map(|module| module.render_status().map(Message::Status)),
-            )
-            .spacing(4),
-            separator(),
+            Column::from_iter(infos).spacing(4),
+            separator(has_infos),
+            Column::from_iter(status).spacing(4),
+            separator(true),
             self.clock.render().map(Message::Clock)
         ]
         .padding(Padding::ZERO.top(10).bottom(5)) // gives some visual balance
@@ -278,7 +290,7 @@ impl Liischte {
                     .get(id)
                     .expect("tried to show osd from non-existent status")
                     .render_osd(*osd)
-                    .map(Message::Status)
+                    .map(Message::Module)
             } else {
                 empty().into()
             };

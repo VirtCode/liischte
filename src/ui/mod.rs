@@ -1,5 +1,5 @@
 use iced::{
-    Font, Radius,
+    Color, Font, Radius,
     widget::{Rule, Space, Text, horizontal_rule, rule, text},
 };
 use lucide_icons::Icon;
@@ -19,10 +19,10 @@ pub const PILL_RADIUS: Radius = Radius {
 };
 
 /// creates a separator for the bar
-pub fn separator<'a>() -> Rule<'a> {
+pub fn separator<'a>(visible: bool) -> Rule<'a> {
     horizontal_rule(2)
-        .style(|_| rule::Style {
-            color: CONFIG.looks.semi,
+        .style(move |_| rule::Style {
+            color: if visible { CONFIG.looks.semi } else { Color::TRANSPARENT },
             width: 2,
             fill_mode: rule::FillMode::Full,
             radius: Radius::new(2),
@@ -33,6 +33,12 @@ pub fn separator<'a>() -> Rule<'a> {
 /// creates an icon with the lucide icon font
 pub fn icon<'a>(icon: Icon) -> Text<'a> {
     text(icon.unicode()).font(Font::with_name("lucide")).size(24)
+}
+
+/// creates an icon with the lucide icon font (from a char)
+/// TODO: remove me once Icon is copy
+pub fn icon_char<'a>(icon: char) -> Text<'a> {
+    text(icon).font(Font::with_name("lucide")).size(24)
 }
 
 /// creates an empty widget

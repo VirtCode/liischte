@@ -20,18 +20,13 @@ log = "0.4.27"
 futures-core = "0.3.31"
 pin-project-lite = "0.2.16"
 
-# power feature
+# various features
 udev = { version = "0.9.3", features = ["send"], optional = true }
-
-# pipewire feature
 pipewire = { git = "https://gitlab.freedesktop.org/pipewire/pipewire-rs", optional = true }
-
-# network manager
 zbus = { version = "5.7.1", default-features = false, features = ["tokio"], optional = true }
 rusty_network_manager = { git = "https://github.com/flukejones/network_manager", optional = true, default-features = false, features = ["access_point", "active", "wireless"] }
-
-# modem manager
 modemmanager = { git = "https://github.com/omnect/modemmanager", optional = true}
+nix = { version = "0.30.1", default-features = false, features = ["signal"], optional = true }
 
 [features]
 hyprland = []
@@ -39,5 +34,6 @@ power = ["dep:udev"]
 pipewire = ["dep:pipewire"]
 networkmanager = ["dep:zbus", "dep:rusty_network_manager"]
 modemmanager = ["networkmanager", "dep:modemmanager", "rusty_network_manager/device"]
+process = ["dep:nix"]
 
-default = ["hyprland", "power", "pipewire", "networkmanager", "modemmanager"]
+default = ["hyprland", "power", "pipewire", "networkmanager", "modemmanager", "process"]

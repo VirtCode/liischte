@@ -11,6 +11,7 @@ use crate::osd::OsdId;
 pub mod audio;
 pub mod network;
 pub mod power;
+pub mod process;
 
 /// id representing a module (or rather it's message)
 pub type ModuleId = TypeId;
@@ -39,14 +40,14 @@ pub trait Module: Send {
         false
     }
 
-    /// the iced render method, which renders a potential info
+    /// the iced render method, which renders the status
     fn render_status(&self) -> Element<'_, Self::Message, Theme, Renderer> {
         panic!("module does not implement status but is rendered")
     }
 
-    /// the iced render method, which renders the status
-    fn render_info(&self) -> Option<Element<'_, Self::Message, Theme, Renderer>> {
-        None
+    /// the iced render method, which renders potential infos
+    fn render_info(&self) -> Vec<Element<'_, Self::Message, Theme, Renderer>> {
+        Vec::new()
     }
 
     /// the iced render method, which renders the osd
@@ -74,7 +75,7 @@ pub trait AbstractModule: Send {
 
     fn render_status(&self) -> Element<'_, Box<dyn ModuleMessage>, Theme, Renderer>;
 
-    fn render_info(&self) -> Option<Element<'_, Box<dyn ModuleMessage>, Theme, Renderer>>;
+    fn render_info(&self) -> Vec<Element<'_, Box<dyn ModuleMessage>, Theme, Renderer>>;
 
     fn render_osd(&self, id: OsdId) -> Element<'_, Box<dyn ModuleMessage>, Theme, Renderer>;
 }
@@ -115,9 +116,11 @@ impl<T: Module> AbstractModule for T {
         Module::render_status(self).map(|msg| -> Box<dyn ModuleMessage> { Box::new(msg) })
     }
 
-    fn render_info(&self) -> Option<Element<'_, Box<dyn ModuleMessage>, Theme, Renderer>> {
+    fn render_info(&self) -> Vec<Element<'_, Box<dyn ModuleMessage>, Theme, Renderer>> {
         Module::render_info(self)
+            .into_iter()
             .map(|elem| elem.map(|msg| -> Box<dyn ModuleMessage> { Box::new(msg) }))
+            .collect()
     }
 
     fn render_osd(&self, id: OsdId) -> Element<'_, Box<dyn ModuleMessage>, Theme, Renderer> {

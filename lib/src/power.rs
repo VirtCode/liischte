@@ -154,7 +154,7 @@ impl BatteryPowerDevice {
     /// then from the sysfs
     pub fn listen_charge(self, polling: Duration) -> StaticStream<f64> {
         let mut interval = tokio::time::interval_at(Instant::now(), polling);
-        interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
 
         let bat = Box::leak(Box::new(self));
 

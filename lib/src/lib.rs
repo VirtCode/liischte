@@ -27,6 +27,10 @@ pub mod pipewire;
 #[cfg(feature = "power")]
 pub mod power;
 
+/// implementation of running processes information using the procfs
+#[cfg(feature = "process")]
+pub mod process;
+
 mod util;
 
 /// a boxed stream with a static lifetime
