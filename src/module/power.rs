@@ -4,9 +4,16 @@ use anyhow::{Context, Result};
 use async_trait::async_trait;
 use futures::{StreamExt, stream};
 use iced::{
-    Background, Color, Element, Length, Renderer, Subscription, Task, Theme,
+    Background, Element, Length, Limits, Rectangle, Renderer, Size, Subscription, Task,
+    Theme,
     advanced::subscription::{EventStream, Recipe, from_recipe},
-    widget::{Space, container, stack},
+    core::{
+        Layout, Widget,
+        layout::{self, Node},
+        mouse, renderer,
+        widget::Tree,
+    },
+    widget::stack,
 };
 use iced_winit::futures::BoxStream;
 use liischte_lib::power::{BatteryPowerDevice, MainsPowerDevice, PowerDevice, PowerDeviceKind};
@@ -14,7 +21,11 @@ use log::{debug, error, info};
 use lucide_icons::Icon;
 use serde::Deserialize;
 
-use crate::{config::CONFIG, osd::OsdId, ui::icon};
+use crate::{
+    config::CONFIG,
+    osd::OsdId,
+    ui::icon,
+};
 
 use super::{Module, ModuleMessage};
 
@@ -168,19 +179,64 @@ impl Module for PowerModule {
             if charge < self.config.critical {
                 icon(Icon::BatteryWarning).into()
             } else {
-                stack![
-                    icon(Icon::Battery),
-                    container(container(Space::new(Length::Fill, Length::Fill)).style(|_| {
-                        container::Style {
-                            background: Some(Background::Color(Color::WHITE)),
-                            ..Default::default()
-                        }
-                    }))
-                    .padding([15, 19 - (10f64 * charge) as u16, 15, 5]),
-                ]
-                .into()
+                stack![icon(Icon::Battery), BatteryBar(charge as f32)].into()
             }
         }
+    }
+}
+
+struct BatteryBar(f32);
+
+impl<Message, Theme, Renderer> Widget<Message, Theme, Renderer> for BatteryBar
+where
+    Message: Clone,
+    Renderer: iced::core::Renderer,
+{
+    fn size(&self) -> Size<Length> {
+        Size { width: Length::Fill, height: Length::Fill }
+    }
+
+    fn layout(&self, _tree: &mut Tree, _renderer: &Renderer, limits: &Limits) -> Node {
+        layout::atomic(limits, Length::Fill, Length::Fill)
+    }
+
+    fn draw(
+        &self,
+        _tree: &Tree,
+        renderer: &mut Renderer,
+        _theme: &Theme,
+        _style: &renderer::Style,
+        layout: Layout<'_>,
+        _cursor: mouse::Cursor,
+        _viewport: &Rectangle,
+    ) {
+        let bounds = layout.bounds();
+
+        // the official icons have slight vertical aliasing, so we try to replicate that
+        const ALIASING: f32 = 0.2;
+
+        renderer.fill_quad(
+            renderer::Quad {
+                bounds: Rectangle {
+                    x: (bounds.x + 5.0).floor(),
+                    y: (bounds.y + 15.0).floor() + ALIASING,
+                    width: 10.0 * self.0,
+                    height: 4.0 - ALIASING * 2.0,
+                },
+                ..renderer::Quad::default()
+            },
+            Background::Color(CONFIG.looks.foreground),
+        );
+    }
+}
+
+impl<'a, Message, Theme, Renderer> From<BatteryBar> for Element<'a, Message, Theme, Renderer>
+where
+    Message: Clone + 'a,
+    Renderer: iced::core::Renderer + 'a,
+{
+    fn from(bar: BatteryBar) -> Element<'a, Message, Theme, Renderer> {
+        Element::new(bar)
     }
 }
 

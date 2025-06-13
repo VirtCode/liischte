@@ -105,11 +105,15 @@ impl Module for AudioModule {
         self.selected_source =
             self.sources.iter().find(|source| source.name == self.defaults.source).cloned();
 
-        let osd = if self.selected_sink != sink
+        let osd = if sink.is_some()
+            && self.selected_sink.is_some()
+            && self.selected_sink != sink
             && let Some(ref selected) = self.selected_sink
         {
             Some(selected.id)
-        } else if self.selected_source != source
+        } else if source.is_some()
+            && self.selected_source.is_some()
+            && self.selected_source != source
             && let Some(ref selected) = self.selected_source
         {
             Some(OSD_SOURCE_FLAG | selected.id)
@@ -161,7 +165,7 @@ impl Module for AudioModule {
         } else if id & OSD_SOURCE_FLAG != 0
             && let Some(source) = self.selected_source.as_ref()
         {
-            (source.average_volume(), if source.mute { Icon::Mic } else { Icon::MicOff })
+            (source.average_volume(), if source.mute { Icon::MicOff } else { Icon::Mic })
         } else {
             (0f32, Icon::VolumeOff)
         };

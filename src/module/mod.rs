@@ -50,7 +50,7 @@ pub trait Module: Send {
     }
 
     /// the iced render method, which renders the osd
-    fn render_osd(&self, id: OsdId) -> Element<'_, Self::Message, Theme, Renderer> {
+    fn render_osd(&self, _id: OsdId) -> Element<'_, Self::Message, Theme, Renderer> {
         panic!("module does not implement osd but is rendered");
     }
 }

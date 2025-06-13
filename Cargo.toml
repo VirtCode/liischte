@@ -12,9 +12,9 @@ anyhow = "*"
 tokio = { version = "1.44.1", features = ["rt-multi-thread", "macros"] }
 futures = "0.3.31"
 
-# we use cosmic's iced fork
-iced = { git = "https://github.com/pop-os/iced", rev = "3766ae5c9e8327ebcb5f3110694810b6bc263049", features = ["advanced", "tokio", "winit", "wayland", "multi-window"] }
-iced_winit = { git = "https://github.com/pop-os/iced", rev = "3766ae5c9e8327ebcb5f3110694810b6bc263049", features = ["wayland", "multi-window"], default-features = false }
+# we use our own fork of cosmic's iced fork
+iced = { git = "https://github.com/VirtCode/iced", features = ["advanced", "tokio", "winit", "wayland", "multi-window"] }
+iced_winit = { git = "https://github.com/VirtCode/iced", features = ["wayland", "multi-window"], default-features = false }
 wayland-client = "0.31.10"
 
 log = "0.4.27"
