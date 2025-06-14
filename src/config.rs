@@ -7,7 +7,7 @@ use std::{
     sync::LazyLock,
 };
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, anyhow};
 use iced::{Color, color};
 use log::{debug, error, info};
 use serde::{Deserialize, Deserializer};
@@ -17,6 +17,19 @@ use crate::module::{
     audio::AUDIO_MODULE_IDENTIFIER, network::NETWORK_MODULE_IDENTIFIER,
     power::POWER_MODULE_IDENTIFIER,
 };
+
+/// path where the config is read from
+fn config_path() -> Result<PathBuf> {
+    if let Ok(path) = env::var("LIISCHTE_CONFIG") {
+        Ok(PathBuf::from(path))
+    } else if let Ok(config) = env::var("XDG_CONFIG_HOME") {
+        Ok(PathBuf::from(config).join("liischte.toml"))
+    } else if let Ok(config) = env::var("HOME") {
+        Ok(PathBuf::from(config).join(".config/liischte.toml"))
+    } else {
+        Err(anyhow!("$LIISCHTE_CONFIG, $XDG_CONFIG_HOME and $HOME are all not defined"))
+    }
+}
 
 /// deserializes a color from a toml string
 fn deserialize_color<'de, D>(deserializer: D) -> Result<Color, D::Error>
@@ -51,6 +64,8 @@ pub struct Config {
     pub right: bool,
     /// output to show the bar on
     pub output: String,
+    /// whether the ipc socket is enabled
+    pub ipc: bool,
 
     /// looks of the bar
     pub looks: ConfigLooks,
@@ -75,6 +90,7 @@ impl Default for Config {
             namespace: "liischte".to_string(),
             right: false,
             output: "active".to_string(),
+            ipc: true,
             looks: ConfigLooks::default(),
             osd: ConfigOsd::default(),
             hyprland: ConfigHyprland::default(),
@@ -92,23 +108,13 @@ impl Default for Config {
 impl Config {
     /// reads the config from the file system
     pub fn read() -> Result<Option<Self>> {
-        let path = env::var("LIISCHTE_CONFIG")
-            .map(PathBuf::from)
-            .or_else(|_| {
-                env::var("XDG_CONFIG_HOME")
-                    .map(|config| PathBuf::from(config).join("liischte.toml"))
-                    .or_else(|_| {
-                        env::var("HOME")
-                            .map(|home| PathBuf::from(home).join(".config/liischte.toml"))
-                    })
-            })
-            .context("$LIISCHTE_CONFIG, $XDG_CONFIG_HOME and $HOME are all not defined, can't read config")?;
+        let path = config_path()?;
 
         if !path.exists() {
             return Ok(None);
         }
 
-        info!("reading config file from {}", path.to_string_lossy());
+        info!("reading config file from `{}`", path.to_string_lossy());
 
         Ok(Some(
             toml::from_str(&fs::read_to_string(path).context("failed to read config file")?)

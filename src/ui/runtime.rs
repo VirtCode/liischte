@@ -1,5 +1,6 @@
 use futures::io::Error;
 use iced::Executor;
+use log::trace;
 use tokio::runtime::Handle;
 
 /// this is an iced runtime which uses the currently running tokio runtime. this
@@ -14,6 +15,7 @@ impl Executor for ExistingRuntime {
     where
         Self: Sized,
     {
+        trace!("using existing tokio runtime for iced executor");
         Ok(Self { handle: Handle::try_current().map_err(Error::other)? })
     }
 

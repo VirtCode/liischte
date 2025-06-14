@@ -8,8 +8,8 @@ use iced::{
 };
 use iced_winit::futures::BoxStream;
 use liischte_lib::process::{
-        ProcessInfo, ProcessSignal, listen_running_processes, read_running_processes, send_signal,
-    };
+    ProcessInfo, ProcessSignal, listen_running_processes, read_running_processes, send_signal,
+};
 use log::{debug, error};
 use lucide_icons::Icon;
 use serde::Deserialize;
@@ -55,6 +55,7 @@ impl ModuleMessage for ProcessMessage {}
 pub enum ProcessMessage {
     Processes(Vec<ProcessInfo>),
     Stop(u64),
+    Rescan,
     Ok,
 }
 
@@ -96,6 +97,10 @@ impl Module for ProcessModule {
         from_recipe(ProcessMonitor(self.rate)).map(Self::Message::Processes)
     }
 
+    fn pass_message(&self, message: &str) -> Option<Self::Message> {
+        if message.eq("rescan") { Some(Self::Message::Rescan) } else { None }
+    }
+
     fn update(&mut self, message: &Self::Message) -> (Task<Self::Message>, Option<OsdId>) {
         match message {
             ProcessMessage::Processes(infos) => {
@@ -120,6 +125,19 @@ impl Module for ProcessModule {
                         result
                             .map_err(|e| {
                                 error!("failed to re-read running processes after kill: {e:#}")
+                            })
+                            .map(ProcessMessage::Processes)
+                            .unwrap_or(ProcessMessage::Ok)
+                    }),
+                    None,
+                );
+            }
+            ProcessMessage::Rescan => {
+                return (
+                    Task::perform(read_running_processes(), |result| {
+                        result
+                            .map_err(|e| {
+                                error!("failed to re-read running processes on demand: {e:#}")
                             })
                             .map(ProcessMessage::Processes)
                             .unwrap_or(ProcessMessage::Ok)

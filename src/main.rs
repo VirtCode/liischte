@@ -1,6 +1,7 @@
 #![feature(hasher_prefixfree_extras)]
 use std::collections::HashMap;
 
+use anyhow::{Context, Result};
 use clock::{Clock, ClockMessage};
 use config::CONFIG;
 use hyprland::{Hyprland, HyprlandMessage};
@@ -19,7 +20,7 @@ use iced_winit::commands::{
     subsurface::{Anchor, Layer},
 };
 use indexmap::IndexMap;
-use log::{error, info};
+use log::{debug, error, info};
 use lucide_icons::lucide_font_bytes;
 use module::{
     AbstractModule, ModuleMessage,
@@ -32,9 +33,13 @@ use ui::{empty, separator, window::layer_window};
 
 use iced::widget::container as create_container;
 
-use crate::ui::{
-    outputs::{OutputHandler, OutputMessage},
-    runtime::ExistingRuntime,
+use crate::{
+    cli::{Command, read_command},
+    ipc::{IpcMessage, IpcServer},
+    ui::{
+        outputs::{OutputHandler, OutputMessage},
+        runtime::ExistingRuntime,
+    },
 };
 use crate::{
     module::ModuleId,
@@ -46,13 +51,24 @@ mod clock;
 mod hyprland;
 mod module;
 
+mod cli;
 pub mod config;
+mod ipc;
 mod osd;
 mod ui;
 
 #[tokio::main]
-async fn main() -> iced::Result {
+async fn main() -> Result<()> {
     env_logger::init_from_env(env_logger::Env::new().default_filter_or("info"));
+
+    // read command from the cli
+    match read_command() {
+        Some(Command::Pass { module, message }) => {
+            ipc::send(IpcMessage::ModuleUpdate(module, message)).await?;
+            return Ok(());
+        }
+        None => {}
+    }
 
     let app = layer_window::<_, Message, _, _, ExistingRuntime>(
         Liischte::update,
@@ -77,7 +93,7 @@ async fn main() -> iced::Result {
     liischte.init().await;
 
     // run iced app with surface
-    app.run_with(move || (liischte, Task::none()))
+    app.run_with(move || (liischte, Task::none())).context("failed to start iced application")
 }
 
 #[derive(Debug, Clone)]
@@ -88,6 +104,7 @@ enum Message {
 
     Osd(OsdMessage),
     Output(OutputMessage),
+    Ipc(IpcMessage),
 }
 
 struct Liischte {
@@ -98,6 +115,8 @@ struct Liischte {
     osd: Option<OsdHandler>,
 
     module_names: HashMap<String, ModuleId>,
+    ipc: Option<IpcServer>,
+
     outputs: OutputHandler,
     alive: bool, // whether the surface is alive
     surface: SurfaceId,
@@ -113,6 +132,8 @@ impl Liischte {
             osd: if CONFIG.osd.enabled { Some(OsdHandler::new()) } else { None },
 
             module_names: HashMap::new(),
+            ipc: None,
+
             outputs: OutputHandler::new(),
             alive: false,
             surface: SurfaceId::unique(),
@@ -121,6 +142,15 @@ impl Liischte {
 
     /// initializes the liischte by initializing all required modules
     pub async fn init(&mut self) {
+        if CONFIG.ipc {
+            match IpcServer::run().await {
+                Ok(server) => self.ipc = Some(server),
+                Err(e) => {
+                    error!("failed to start ipc server: {e:#}");
+                }
+            }
+        }
+
         if CONFIG.hyprland.enabled {
             match Hyprland::new().await {
                 Ok(hl) => self.hyprland = Some(hl),
@@ -236,6 +266,23 @@ impl Liischte {
                     Task::none()
                 }
             }
+
+            Message::Ipc(msg) => match msg {
+                IpcMessage::ModuleUpdate(module, msg) => {
+                    if let Some(module) =
+                        self.module_names.get(&module).and_then(|id| self.modules.get(id))
+                    {
+                        if let Some(message) = module.pass_message(&msg) {
+                            Task::done(Message::Module(message))
+                        } else {
+                            Task::none()
+                        }
+                    } else {
+                        info!("module `{module}` not found when passing message");
+                        Task::none()
+                    }
+                }
+            },
         }
     }
 
@@ -250,6 +297,10 @@ impl Liischte {
                 self.modules.values().map(|status| status.subscribe().map(Message::Module)),
             ),
             self.outputs.subscribe().map(Message::Output),
+            self.ipc
+                .as_ref()
+                .map(|s| s.get_subscription().map(Message::Ipc))
+                .unwrap_or(Subscription::none()),
         ])
     }
 

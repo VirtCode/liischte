@@ -33,6 +33,11 @@ pub trait Module: Send {
     /// received
     fn update(&mut self, message: &Self::Message) -> (Task<Self::Message>, Option<OsdId>);
 
+    /// maps a message passed from ipc to a message this module understands
+    fn pass_message(&self, _message: &str) -> Option<Self::Message> {
+        None
+    }
+
     /// reports whether the module has a status indicator
     /// this should stay the same during the whole application lifecycle (use
     /// infos for dynamic appearance)
@@ -68,6 +73,8 @@ pub trait AbstractModule: Send {
 
     fn subscribe(&self) -> Subscription<Box<dyn ModuleMessage>>;
 
+    fn pass_message(&self, message: &str) -> Option<Box<dyn ModuleMessage>>;
+
     fn update(
         &mut self,
         message: Box<dyn ModuleMessage>,
@@ -92,6 +99,10 @@ impl<T: Module> AbstractModule for T {
 
     fn subscribe(&self) -> Subscription<Box<dyn ModuleMessage>> {
         Module::subscribe(self).map(|msg| -> Box<dyn ModuleMessage> { Box::new(msg) })
+    }
+
+    fn pass_message(&self, message: &str) -> Option<Box<dyn ModuleMessage>> {
+        Module::pass_message(self, message).map(|msg| -> Box<dyn ModuleMessage> { Box::new(msg) })
     }
 
     fn update(
