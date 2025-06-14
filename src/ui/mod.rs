@@ -8,6 +8,7 @@ use crate::config::CONFIG;
 
 pub mod outputs;
 pub mod progress;
+pub mod runtime;
 pub mod window;
 
 /// radius to use to create a pill shape

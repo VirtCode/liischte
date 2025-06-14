@@ -127,3 +127,8 @@ impl<T: Module> AbstractModule for T {
         Module::render_osd(self, id).map(|msg| -> Box<dyn ModuleMessage> { Box::new(msg) })
     }
 }
+
+/// converts the module to a boxed type
+pub fn boxed<T: Module + 'static>(m: T) -> Box<dyn AbstractModule> {
+    Box::new(m)
+}

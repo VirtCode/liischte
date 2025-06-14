@@ -1,4 +1,6 @@
 #![feature(hasher_prefixfree_extras)]
+use std::collections::HashMap;
+
 use clock::{Clock, ClockMessage};
 use config::CONFIG;
 use hyprland::{Hyprland, HyprlandMessage};
@@ -30,7 +32,10 @@ use ui::{empty, separator, window::layer_window};
 
 use iced::widget::container as create_container;
 
-use crate::ui::outputs::{OutputHandler, OutputMessage};
+use crate::ui::{
+    outputs::{OutputHandler, OutputMessage},
+    runtime::ExistingRuntime,
+};
 use crate::{
     module::ModuleId,
     osd::{OsdHandler, OsdMessage},
@@ -49,7 +54,7 @@ mod ui;
 async fn main() -> iced::Result {
     env_logger::init_from_env(env_logger::Env::new().default_filter_or("info"));
 
-    let app = layer_window::<_, Message, _, _, iced::executor::Default>(
+    let app = layer_window::<_, Message, _, _, ExistingRuntime>(
         Liischte::update,
         Liischte::view,
         Liischte::subscription,
@@ -67,21 +72,9 @@ async fn main() -> iced::Result {
         ..Default::default()
     });
 
+    info!("starting liischte");
     let mut liischte = Liischte::new();
-
-    if CONFIG.hyprland.enabled {
-        liischte.set_hyprland(Hyprland::new().await.unwrap());
-    }
-
-    for status in CONFIG.modules.iter().rev() {
-        liischte.add_module(match status.as_str() {
-            POWER_MODULE_IDENTIFIER => Box::new(PowerModule::new().await.unwrap()),
-            NETWORK_MODULE_IDENTIFIER => Box::new(NewtorkModule::new().await.unwrap()),
-            PROCESS_MODULE_IDENTIFIER => Box::new(ProcessModule::new().unwrap()),
-            AUDIO_MODULE_IDENTIFIER => Box::new(AudioModule::new()),
-            status => panic!("status `{status}` does not exist in this version"),
-        });
-    }
+    liischte.init().await;
 
     // run iced app with surface
     app.run_with(move || (liischte, Task::none()))
@@ -104,9 +97,10 @@ struct Liischte {
 
     osd: Option<OsdHandler>,
 
+    module_names: HashMap<String, ModuleId>,
     outputs: OutputHandler,
     alive: bool, // whether the surface is alive
-    pub surface: SurfaceId,
+    surface: SurfaceId,
 }
 
 impl Liischte {
@@ -118,20 +112,45 @@ impl Liischte {
 
             osd: if CONFIG.osd.enabled { Some(OsdHandler::new()) } else { None },
 
+            module_names: HashMap::new(),
             outputs: OutputHandler::new(),
             alive: false,
             surface: SurfaceId::unique(),
         }
     }
 
-    /// set the hyprland instance
-    pub fn set_hyprland(&mut self, hyprland: Hyprland) {
-        self.hyprland = Some(hyprland);
-    }
+    /// initializes the liischte by initializing all required modules
+    pub async fn init(&mut self) {
+        if CONFIG.hyprland.enabled {
+            match Hyprland::new().await {
+                Ok(hl) => self.hyprland = Some(hl),
+                Err(e) => {
+                    error!("failed to initialize hyprland: {e:#}");
+                }
+            }
+        }
 
-    /// add a status to the bar
-    pub fn add_module(&mut self, status: Box<dyn AbstractModule>) {
-        self.modules.insert(status.message_type(), status);
+        for status in CONFIG.modules.iter().rev() {
+            let module = match status.as_str() {
+                POWER_MODULE_IDENTIFIER => PowerModule::new().await.map(module::boxed),
+                NETWORK_MODULE_IDENTIFIER => NewtorkModule::new().await.map(module::boxed),
+                PROCESS_MODULE_IDENTIFIER => ProcessModule::new().map(module::boxed),
+                AUDIO_MODULE_IDENTIFIER => Ok(module::boxed(AudioModule::new())),
+                status => panic!("status `{status}` does not exist in this version"),
+            };
+
+            match module {
+                Ok(module) => {
+                    info!("adding module `{status}` to bar");
+
+                    self.module_names.insert(status.clone(), module.message_type());
+                    self.modules.insert(module.message_type(), module);
+                }
+                Err(e) => {
+                    error!("failed to initialize module `{status}`: {e:#}")
+                }
+            }
+        }
     }
 
     fn open(&mut self, output: IcedOutput) -> Task<Message> {

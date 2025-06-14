@@ -7,12 +7,9 @@ use iced::{
     widget::mouse_area,
 };
 use iced_winit::futures::BoxStream;
-use liischte_lib::{
-    StreamContext,
-    process::{
+use liischte_lib::process::{
         ProcessInfo, ProcessSignal, listen_running_processes, read_running_processes, send_signal,
-    },
-};
+    };
 use log::{debug, error};
 use lucide_icons::Icon;
 use serde::Deserialize;
