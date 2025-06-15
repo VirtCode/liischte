@@ -9,6 +9,7 @@ use log::trace;
 use crate::osd::OsdId;
 
 pub mod audio;
+pub mod backlight;
 pub mod network;
 pub mod power;
 pub mod process;

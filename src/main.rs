@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use anyhow::{Context, Result};
 use clock::{Clock, ClockMessage};
 use config::CONFIG;
+use futures::StreamExt;
 use hyprland::{Hyprland, HyprlandMessage};
 use iced::{
     Background, Border, Color, Font, Length, Limits, Padding, Subscription, Task, Theme,
@@ -20,11 +21,12 @@ use iced_winit::commands::{
     subsurface::{Anchor, Layer},
 };
 use indexmap::IndexMap;
-use log::{debug, error, info};
+use log::{error, info};
 use lucide_icons::lucide_font_bytes;
 use module::{
     AbstractModule, ModuleMessage,
     audio::{AUDIO_MODULE_IDENTIFIER, AudioModule},
+    backlight::{BACKLIGHT_MODULE_IDENTIFIER, BacklightModule},
     network::{NETWORK_MODULE_IDENTIFIER, NewtorkModule},
     power::{POWER_MODULE_IDENTIFIER, PowerModule},
     process::{PROCESS_MODULE_IDENTIFIER, ProcessModule},
@@ -163,6 +165,7 @@ impl Liischte {
         for status in CONFIG.modules.iter().rev() {
             let module = match status.as_str() {
                 POWER_MODULE_IDENTIFIER => PowerModule::new().await.map(module::boxed),
+                BACKLIGHT_MODULE_IDENTIFIER => BacklightModule::new().await.map(module::boxed),
                 NETWORK_MODULE_IDENTIFIER => NewtorkModule::new().await.map(module::boxed),
                 PROCESS_MODULE_IDENTIFIER => ProcessModule::new().map(module::boxed),
                 AUDIO_MODULE_IDENTIFIER => Ok(module::boxed(AudioModule::new())),

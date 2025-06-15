@@ -1,25 +1,24 @@
-use std::{path::PathBuf, time::Duration};
+use std::time::Duration;
 
 use anyhow::{Context, Result};
 use futures::StreamExt;
 use log::trace;
-use tokio::{fs, time::Instant};
-use tokio_stream::wrappers::ReadDirStream;
+use tokio::time::Instant;
 use udev::MonitorBuilder;
 
 use crate::{StaticStream, StreamContext};
 
-use super::util::udev::AsyncMonitorSocket;
+use crate::util::udev::AsyncMonitorSocket;
+
+use super::Device;
 
 /// a device in the `power_supply` sysfs
 #[derive(Clone)]
 pub struct PowerDevice {
-    path: PathBuf,
+    pub device: Device,
 
     /// the type of the device
     pub kind: PowerDeviceKind,
-    /// the name of the device
-    pub name: String,
 }
 
 /// represents the type of a device read from the sysfs
@@ -46,49 +45,18 @@ impl PowerDeviceKind {
 impl PowerDevice {
     /// reads all power devices currently available from the sysfs
     pub async fn read_all() -> Result<Vec<Self>> {
-        let devices = fs::read_dir("/sys/class/power_supply")
-            .await
-            .context("`power_supply` sysfs is required for power information")?;
+        let devices = Device::read_devices("power_supply").await?;
 
-        Ok(ReadDirStream::new(devices)
-            .filter_map(async |result| result.ok())
-            .filter_map(async |entry| {
-                let path = entry.path();
+        Ok(futures::future::join_all(devices.into_iter().map(|this| async {
+            let kind = if let Ok(kind) = this.read_device_attribute_string("type").await {
+                PowerDeviceKind::parse(&kind)
+            } else {
+                PowerDeviceKind::Unknown
+            };
 
-                let Some(name) = path.file_name() else {
-                    return None;
-                };
-
-                let mut this = PowerDevice {
-                    name: name.to_string_lossy().to_string(),
-                    kind: PowerDeviceKind::Unknown,
-                    path,
-                };
-
-                if let Ok(kind) = this.read_device_attribute_string("type").await {
-                    this.kind = PowerDeviceKind::parse(&kind)
-                }
-
-                Some(this)
-            })
-            .collect::<Vec<_>>()
-            .await)
-    }
-
-    /// reads a sysfs device attribute as a string
-    async fn read_device_attribute_string(&self, attribute: &str) -> Result<String> {
-        fs::read_to_string(self.path.join(attribute))
-            .await
-            .with_context(|| format!("failed to read `{attribute}` file of device `{}`", self.name))
-    }
-
-    /// reads a sysfs device attribute as a an integer
-    async fn read_device_attribute_int(&self, attribute: &str) -> Result<i64> {
-        self.read_device_attribute_string(attribute).await.and_then(|s| {
-            s.trim().parse::<i64>().with_context(|| {
-                format!("could not parse `{attribute}` for device `{}`", self.name)
-            })
-        })
+            Self { device: this, kind }
+        }))
+        .await)
     }
 }
 
@@ -100,7 +68,7 @@ pub struct MainsPowerDevice(pub PowerDevice);
 impl MainsPowerDevice {
     /// reads the online state
     pub async fn read_online(&self) -> Result<bool> {
-        self.0.read_device_attribute_int("online").await.map(|v| v == 1)
+        self.0.device.read_device_attribute_int("online").await.map(|v| v == 1)
     }
 
     /// creates a stream which listens to udev events for the given ac adapter
@@ -119,7 +87,7 @@ impl MainsPowerDevice {
                     .stream_log("ac online stream")?
                     .sysname()
                     .to_string_lossy()
-                    == *this.0.name
+                    == *this.0.device.name
                 {
                     Some(())
                 } else {
@@ -142,12 +110,20 @@ pub struct BatteryPowerDevice(pub PowerDevice);
 impl BatteryPowerDevice {
     /// reads the capacity in Wh, meaning the energy it can store
     pub async fn read_capacity(&self) -> Result<f64> {
-        self.0.read_device_attribute_int("energy_full").await.map(|energy| energy as f64 / 1e6f64)
+        self.0
+            .device
+            .read_device_attribute_int("energy_full")
+            .await
+            .map(|energy| energy as f64 / 1e6f64)
     }
 
     /// reads the charge as a percentage (0-1)
     pub async fn read_charge(&self) -> Result<f64> {
-        self.0.read_device_attribute_int("capacity").await.map(|energy| energy as f64 / 100f64)
+        self.0
+            .device
+            .read_device_attribute_int("capacity")
+            .await
+            .map(|energy| energy as f64 / 100f64)
     }
 
     /// creates a stream which polls the battery charge which is read now and
@@ -164,7 +140,7 @@ impl BatteryPowerDevice {
             while next == last {
                 interval.tick().await;
 
-                trace!("polling battery charge for device `{}`", bat.0.name);
+                trace!("polling battery charge for device `{}`", bat.0.device.name);
                 if let Some(charge) = bat.read_charge().await.stream_log("battery charge stream") {
                     next = charge;
                 };

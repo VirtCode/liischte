@@ -4,8 +4,7 @@ use anyhow::{Context, Result};
 use async_trait::async_trait;
 use futures::{StreamExt, stream};
 use iced::{
-    Background, Element, Length, Limits, Rectangle, Renderer, Size, Subscription, Task,
-    Theme,
+    Background, Element, Length, Limits, Rectangle, Renderer, Size, Subscription, Task, Theme,
     advanced::subscription::{EventStream, Recipe, from_recipe},
     core::{
         Layout, Widget,
@@ -16,16 +15,14 @@ use iced::{
     widget::stack,
 };
 use iced_winit::futures::BoxStream;
-use liischte_lib::power::{BatteryPowerDevice, MainsPowerDevice, PowerDevice, PowerDeviceKind};
+use liischte_lib::sysfs::power::{
+    BatteryPowerDevice, MainsPowerDevice, PowerDevice, PowerDeviceKind,
+};
 use log::{debug, error, info};
 use lucide_icons::Icon;
 use serde::Deserialize;
 
-use crate::{
-    config::CONFIG,
-    osd::OsdId,
-    ui::icon,
-};
+use crate::{config::CONFIG, osd::OsdId, ui::icon};
 
 use super::{Module, ModuleMessage};
 
@@ -86,14 +83,15 @@ impl PowerModule {
         let mut batteries = vec![];
 
         for device in PowerDevice::read_all().await.context("failed to read power devices")? {
-            debug!("checking power device with name `{}` ({:?})", device.name, device.kind);
+            debug!("checking power device with name `{}` ({:?})", device.device.name, device.kind);
 
             match device.kind {
                 PowerDeviceKind::Mains => {
                     let device = MainsPowerDevice(device);
 
                     if mains.is_none()
-                        && (config.mains.as_ref() == Some(&device.0.name) || config.mains.is_none())
+                        && (config.mains.as_ref() == Some(&device.0.device.name)
+                            || config.mains.is_none())
                     {
                         mains = Some(Mains { online: device.read_online().await?, device })
                     }
@@ -101,7 +99,9 @@ impl PowerModule {
                 PowerDeviceKind::Battery => {
                     let device = BatteryPowerDevice(device);
 
-                    if config.batteries.is_empty() || config.batteries.contains(&device.0.name) {
+                    if config.batteries.is_empty()
+                        || config.batteries.contains(&device.0.device.name)
+                    {
                         batteries.push(Battery {
                             capacity: device.read_capacity().await?,
                             charge: device.read_charge().await?,
@@ -115,8 +115,12 @@ impl PowerModule {
 
         info!(
             "using ac {} and batteries [{}]",
-            mains.as_ref().map(|ac| ac.device.0.name.as_str()).unwrap_or("<none>"),
-            batteries.iter().map(|bat| bat.device.0.name.as_str()).collect::<Vec<_>>().join(", ")
+            mains.as_ref().map(|ac| ac.device.0.device.name.as_str()).unwrap_or("<none>"),
+            batteries
+                .iter()
+                .map(|bat| bat.device.0.device.name.as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
         );
 
         Ok(Self { mains, batteries, config })
@@ -246,11 +250,11 @@ impl Recipe for OnlineMonitor {
     type Output = bool;
 
     fn hash(&self, state: &mut iced::advanced::subscription::Hasher) {
-        state.write_str(&format!("ac online events for {}", self.0.0.name));
+        state.write_str(&format!("ac online events for {}", self.0.0.device.name));
     }
 
     fn stream(self: Box<Self>, _input: EventStream) -> BoxStream<Self::Output> {
-        debug!("staring mains online listener for {}", self.0.0.name);
+        debug!("staring mains online listener for {}", self.0.0.device.name);
 
         match self.0.listen_online() {
             Ok(s) => s,
@@ -268,11 +272,11 @@ impl Recipe for ChargeMonitor {
     type Output = f64;
 
     fn hash(&self, state: &mut iced::advanced::subscription::Hasher) {
-        state.write_str(&format!("battery charge events for {}", self.0.0.name));
+        state.write_str(&format!("battery charge events for {}", self.0.0.device.name));
     }
 
     fn stream(self: Box<Self>, _input: EventStream) -> BoxStream<Self::Output> {
-        debug!("starting battery charge listener for {}", self.0.0.name);
+        debug!("starting battery charge listener for {}", self.0.0.device.name);
         self.0.listen_charge(self.1)
     }
 }

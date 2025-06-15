@@ -20,12 +20,9 @@ pub mod networkmanager;
 #[cfg(feature = "pipewire")]
 pub mod pipewire;
 
-/// implementation of power information using events from udev and the
-/// power_supply sysfs
-/// https://www.kernel.org/doc/Documentation/ABI/testing/sysfs-class-power
-/// https://www.kernel.org/doc/Documentation/power/power_supply_class.rst
-#[cfg(feature = "power")]
-pub mod power;
+/// implementations using the sysfs
+#[cfg(any(feature = "power", feature = "backlight"))]
+pub mod sysfs;
 
 /// implementation of running processes information using the procfs
 #[cfg(feature = "process")]
