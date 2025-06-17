@@ -1,4 +1,4 @@
-use std::{cell::RefCell, collections::HashMap, io::Cursor, rc::Rc};
+use std::{cell::RefCell, cmp::max, collections::HashMap, io::Cursor, rc::Rc};
 
 use log::{debug, trace, warn};
 use pipewire::{
@@ -102,7 +102,7 @@ impl NodeState {
     }
 
     pub fn average_volume(&self) -> f32 {
-        self.volume.iter().sum::<f32>() / self.volume.len() as f32
+        self.volume.iter().sum::<f32>() / max(self.volume.len(), 1) as f32
     }
 }
 
