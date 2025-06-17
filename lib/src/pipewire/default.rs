@@ -115,8 +115,11 @@ impl Default for DefaultState {
 impl DefaultState {
     fn update(&mut self, key: Option<&str>, value: Option<&str>) -> bool {
         let Some(key) = key else {
-            *self = Self::default();
-            return true;
+            // the docs mention that a null key means the removal of all values,
+            // but this is sometimes sent for no reason so we just ignore it here
+            // *self = Self::default();
+
+            return false;
         };
 
         let var = match key {
