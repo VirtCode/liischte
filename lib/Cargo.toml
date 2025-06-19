@@ -22,10 +22,10 @@ pin-project-lite = "0.2.16"
 
 # various features
 udev = { version = "0.9.3", features = ["send"], optional = true }
-pipewire = { git = "https://gitlab.freedesktop.org/pipewire/pipewire-rs", optional = true }
+pipewire = { git = "https://gitlab.freedesktop.org/pipewire/pipewire-rs.git", optional = true }
 zbus = { version = "5.7.1", default-features = false, features = ["tokio"], optional = true }
-rusty_network_manager = { git = "https://github.com/flukejones/network_manager", optional = true, default-features = false, features = ["access_point", "active", "wireless"] }
-modemmanager = { git = "https://github.com/omnect/modemmanager", optional = true}
+rusty_network_manager = { git = "https://github.com/flukejones/network_manager.git", optional = true, default-features = false, features = ["access_point", "active", "wireless"] }
+modemmanager = { git = "https://github.com/omnect/modemmanager.git", optional = true}
 nix = { version = "0.30.1", default-features = false, features = ["signal"], optional = true }
 
 [features]

@@ -14,8 +14,8 @@ tokio-stream = { version = "0.1.17", features = ["sync"] }
 futures = "0.3.31"
 
 # we use our own fork of cosmic's iced fork
-iced = { git = "https://github.com/VirtCode/iced", features = ["advanced", "tokio", "winit", "wayland", "multi-window"] }
-iced_winit = { git = "https://github.com/VirtCode/iced", features = ["wayland", "multi-window"], default-features = false }
+iced = { git = "https://github.com/VirtCode/iced.git", features = ["advanced", "tokio", "winit", "wayland", "multi-window"] }
+iced_winit = { git = "https://github.com/VirtCode/iced.git", features = ["wayland", "multi-window"], default-features = false }
 wayland-client = "0.31.10"
 
 clap = { version = "4.5.32", features = [ "derive" ] }

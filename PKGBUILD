@@ -9,8 +9,8 @@ url="https://github.com/VirtCode/$_name"
 license=(GPL-3.0)
 arch=(x86_64)
 
-depends=()
-makedepends=(cargo-nightly)
+depends=('libxkbcommon' 'libpipewire' 'wayland')
+makedepends=('cargo-nightly' 'clang' 'modemmanager')
 
 source=("$_name::git+$url.git")
 md5sums=('SKIP')
