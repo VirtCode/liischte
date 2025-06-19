@@ -58,11 +58,12 @@ pub static CONFIG: LazyLock<Config> = LazyLock::new(|| {
 #[derive(Deserialize)]
 #[serde(default)]
 pub struct Config {
-    /// layer namespace to use
+    /// layer namespace to use (with `-osd` for the osd)
     pub namespace: String,
     /// whether to show the bar on the left instead of the right
     pub right: bool,
-    /// output to show the bar on
+    /// output to show the bar on (name, or description with a `desc:` prefix)
+    /// `active` for the active monitor
     pub output: String,
     /// whether the ipc socket is enabled
     pub ipc: bool,
@@ -205,7 +206,7 @@ pub struct ConfigHyprland {
     /// enable hyprland workspace indicator
     pub enabled: bool,
 
-    /// monitor to show workspaces for
+    /// id of the monitor to show workspaces for
     pub monitor: u64,
     /// whether to show fullscreen status in bar
     pub fullscreen: bool,
@@ -234,6 +235,8 @@ impl Default for ConfigHyprland {
 #[derive(Deserialize)]
 #[serde(default)]
 pub struct ConfigClock {
+    /// whether to show the seconds indicator
+    /// (minutes might be inaccurate if disabled)
     pub seconds: bool,
 }
 
