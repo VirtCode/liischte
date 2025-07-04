@@ -206,7 +206,18 @@ impl PipewireThread {
                     return;
                 };
 
-                self.nodes.add(global.id, props, || self.registry.bind(global).ok());
+                self.nodes.add_node(global.id, props, || self.registry.bind(global).ok());
+            }
+            pipewire::types::ObjectType::Device => {
+                let Some(props) = global.props else {
+                    return;
+                };
+
+                let Ok(device) = self.registry.bind(global) else {
+                    return;
+                };
+
+                self.nodes.add_device(global.id, props, device);
             }
             _ => {}
         }

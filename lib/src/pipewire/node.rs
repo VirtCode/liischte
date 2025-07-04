@@ -1,7 +1,14 @@
-use std::{cell::RefCell, cmp::max, collections::HashMap, io::Cursor, rc::Rc};
+use std::{
+    cell::{RefCell, RefMut},
+    cmp::max,
+    collections::HashMap,
+    io::Cursor,
+    rc::Rc,
+};
 
 use log::{debug, trace, warn};
 use pipewire::{
+    device::{Device, DeviceListener},
     node::{Node, NodeListener},
     spa::{
         param::ParamType,
@@ -26,8 +33,14 @@ struct NodeTrackerObject {
     proxy: Node,
     _listener: NodeListener,
 
+    device: Option<u32>,
     class: NodeClass, // yes, we wrongly assume that this won't change for a node
     state: NodeState,
+}
+
+struct DeviceTrackerObject {
+    proxy: Device,
+    _listener: DeviceListener,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -44,6 +57,9 @@ pub struct NodeState {
     pub mute: bool,
     /// current volume of each channel
     pub volume: Vec<f32>,
+
+    /// profile that this node is on a given device
+    pub profile: Option<u32>,
 }
 
 impl NodeState {
@@ -58,6 +74,13 @@ impl NodeState {
         if let Some(description) = props.get("node.description") {
             changed |= description != self.description;
             self.description = description.to_owned();
+        }
+
+        if let Some(id) = props.get("card.profile.device").and_then(|id| {
+            id.parse::<u32>().map_err(|_| warn!("card profile is not an integer")).ok()
+        }) {
+            changed |= Some(id) != self.profile;
+            self.profile = Some(id);
         }
 
         return changed;
@@ -98,6 +121,7 @@ impl NodeState {
             description: String::new(),
             mute: false,
             volume: Vec::new(),
+            profile: None,
         }
     }
 
@@ -111,6 +135,7 @@ pub(crate) struct NodeTracker {
     source_updates: Sender<Vec<NodeState>>,
 
     nodes: RefCell<HashMap<u32, NodeTrackerObject>>,
+    devices: RefCell<HashMap<u32, DeviceTrackerObject>>,
 }
 
 impl NodeTracker {
@@ -118,11 +143,16 @@ impl NodeTracker {
         sink_updates: Sender<Vec<NodeState>>,
         source_updates: Sender<Vec<NodeState>>,
     ) -> Self {
-        Self { nodes: RefCell::new(HashMap::new()), sink_updates, source_updates }
+        Self {
+            nodes: RefCell::new(HashMap::new()),
+            devices: RefCell::new(HashMap::new()),
+            sink_updates,
+            source_updates,
+        }
     }
 
     /// tries to add a node, if it is of interrest
-    pub fn add<F>(self: &Rc<Self>, id: u32, props: &DictRef, bind: F)
+    pub fn add_node<F>(self: &Rc<Self>, id: u32, props: &DictRef, bind: F)
     where
         F: FnOnce() -> Option<Node>,
     {
@@ -135,6 +165,10 @@ impl NodeTracker {
                 return;
             }
         };
+
+        let device = props.get("device.id").and_then(|id| {
+            id.parse::<u32>().map_err(|_| warn!("node device.id was not an integer")).ok()
+        });
 
         // it is the correct class, bind!
         let Some(node) = bind() else {
@@ -155,7 +189,7 @@ impl NodeTracker {
                 let this = self.clone();
                 move |_, what, _, _, pod| {
                     if let (ParamType::Props, Some(pod)) = (what, pod) {
-                        this.update_params(id, pod);
+                        this.update_params_node(id, pod);
                     }
                 }
             })
@@ -168,22 +202,67 @@ impl NodeTracker {
         let mut state = NodeState::new(id);
         state.update_props(props);
 
-        debug!("adding node {id} to tracker ('{}')", state.name);
+        debug!(
+            "adding node {id} to tracker ('{}', device {})",
+            state.name,
+            device.map(|a| a.to_string()).unwrap_or("<none>".to_string())
+        );
+
         self.nodes.borrow_mut().insert(
             id,
-            NodeTrackerObject { proxy: node, _listener: listener, class: class, state: state },
+            NodeTrackerObject { proxy: node, _listener: listener, class, state, device },
         );
 
         self.update(class);
     }
 
-    /// removes a node
-    pub fn remove(&self, id: u32) {
-        let result = self.nodes.borrow_mut().remove(&id);
+    /// tries to add a node, if it is of interrest
+    pub fn add_device(self: &Rc<Self>, id: u32, _props: &DictRef, device: Device) {
+        let listener = device
+            .add_listener_local()
+            .info({
+                let this = self.clone();
+                move |info| {
+                    for param in info.params() {
+                        // we enumerate the route param if it changed
+                        // subscribing doesn't cut it for some reason
+                        if param.id() == ParamType::Route
+                            && let Some(device) = this.devices.borrow().get(&id)
+                        {
+                            device.proxy.enum_params(0, Some(ParamType::Route), 0, u32::MAX);
+                        }
+                    }
+                }
+            })
+            .param({
+                let this = self.clone();
+                move |_, what, _, _, pod| {
+                    if let (ParamType::Route, Some(pod)) = (what, pod) {
+                        this.update_params_device(id, pod);
+                    }
+                }
+            })
+            .register();
 
-        if let Some(removed) = result {
+        device.enum_params(0, Some(ParamType::Route), 0, u32::MAX);
+        device.subscribe_params(&[ParamType::Route]); // does nothing but we do it anyways
+
+        debug!("adding device {id}");
+
+        self.devices
+            .borrow_mut()
+            .insert(id, DeviceTrackerObject { proxy: device, _listener: listener });
+    }
+
+    /// removes an object
+    pub fn remove(&self, id: u32) {
+        if let Some(removed) = self.nodes.borrow_mut().remove(&id) {
             debug!("removing node {id} from tracker");
             self.update(removed.class);
+        }
+
+        if self.devices.borrow_mut().remove(&id).is_some() {
+            debug!("removing device {id} from tracker");
         }
     }
 
@@ -205,12 +284,67 @@ impl NodeTracker {
         }
     }
 
-    /// updates the params of a tracked node
-    fn update_params(&self, id: u32, params: &Pod) {
+    fn update_params_device(&self, id: u32, params: &Pod) {
+        trace!("updating device params for {id}");
+
+        let mut route = None;
+        let mut node_params = None;
+
+        match PodDeserializer::deserialize_any_from(params.as_bytes()) {
+            Err(e) => warn!("failed to deserialize params for device: {e:?}"),
+            Ok((_, Value::Object(obj))) => {
+                for prop in obj.properties {
+                    match (prop.key, prop.value) {
+                        (sys::SPA_PARAM_ROUTE_device, Value::Int(value)) => {
+                            route = Some(value as u32)
+                        }
+                        (sys::SPA_PARAM_ROUTE_props, Value::Object(value)) => {
+                            node_params = Some(value)
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            Ok((_, _)) => {
+                warn!("received non-object body for device params");
+            }
+        }
+
+        if let (Some(route), Some(params)) = (route, node_params) {
+            let mut changed = None;
+
+            if let Some(node) = self
+                .nodes
+                .borrow_mut()
+                .values_mut()
+                .find(|node| node.device == Some(id) && node.state.profile == Some(route))
+            {
+                if node.state.update_params(&params) {
+                    changed = Some(node.class);
+                }
+            } else {
+                debug!("received update for route {route} on device {id}, but no node consumed it");
+            }
+
+            if let Some(changed) = changed {
+                self.update(changed);
+            }
+        } else {
+            warn!("received incomplete device route param update")
+        }
+    }
+
+    /// updates the params of a node if it is tracked
+    fn update_params_node(&self, id: u32, params: &Pod) {
         let mut changed = None;
 
         if let Some(node) = self.nodes.borrow_mut().get_mut(&id) {
-            trace!("updating params for {id}");
+            if node.device.is_some() {
+                debug!("skipping param update for node {id}, because it has a device");
+                return;
+            }
+
+            trace!("updating node params for {id}");
 
             match PodDeserializer::deserialize_any_from(params.as_bytes()) {
                 Err(e) => warn!("failed to deserialize params for {id}: {e:?}"),
