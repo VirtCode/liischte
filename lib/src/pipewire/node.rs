@@ -1,12 +1,6 @@
-use std::{
-    cell::{RefCell, RefMut},
-    cmp::max,
-    collections::HashMap,
-    io::Cursor,
-    rc::Rc,
-};
+use std::{cell::RefCell, cmp::max, collections::HashMap, io::Cursor, rc::Rc};
 
-use log::{debug, trace, warn};
+use log::{debug, error, trace, warn};
 use pipewire::{
     device::{Device, DeviceListener},
     node::{Node, NodeListener},
@@ -16,7 +10,10 @@ use pipewire::{
             Object, Pod, Property, PropertyFlags, Value, ValueArray, deserialize::PodDeserializer,
             object, serialize::PodSerializer,
         },
-        sys::{self, SPA_PROP_channelVolumes, SPA_PROP_mute},
+        sys::{
+            self, SPA_PARAM_ROUTE_device, SPA_PARAM_ROUTE_index, SPA_PARAM_ROUTE_props,
+            SPA_PARAM_ROUTE_save, SPA_PROP_channelVolumes, SPA_PROP_mute,
+        },
         utils::{SpaTypes, dict::DictRef},
     },
 };
@@ -41,6 +38,8 @@ struct NodeTrackerObject {
 struct DeviceTrackerObject {
     proxy: Device,
     _listener: DeviceListener,
+
+    indices: HashMap<u32, u32>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -59,7 +58,7 @@ pub struct NodeState {
     pub volume: Vec<f32>,
 
     /// profile that this node is on a given device
-    pub profile: Option<u32>,
+    pub route: Option<u32>,
 }
 
 impl NodeState {
@@ -79,8 +78,8 @@ impl NodeState {
         if let Some(id) = props.get("card.profile.device").and_then(|id| {
             id.parse::<u32>().map_err(|_| warn!("card profile is not an integer")).ok()
         }) {
-            changed |= Some(id) != self.profile;
-            self.profile = Some(id);
+            changed |= Some(id) != self.route;
+            self.route = Some(id);
         }
 
         return changed;
@@ -121,7 +120,7 @@ impl NodeState {
             description: String::new(),
             mute: false,
             volume: Vec::new(),
-            profile: None,
+            route: None,
         }
     }
 
@@ -216,7 +215,7 @@ impl NodeTracker {
         self.update(class);
     }
 
-    /// tries to add a node, if it is of interrest
+    /// adds a device to be tracked
     pub fn add_device(self: &Rc<Self>, id: u32, _props: &DictRef, device: Device) {
         let listener = device
             .add_listener_local()
@@ -249,14 +248,16 @@ impl NodeTracker {
 
         debug!("adding device {id}");
 
-        self.devices
-            .borrow_mut()
-            .insert(id, DeviceTrackerObject { proxy: device, _listener: listener });
+        self.devices.borrow_mut().insert(
+            id,
+            DeviceTrackerObject { proxy: device, _listener: listener, indices: HashMap::new() },
+        );
     }
 
     /// removes an object
     pub fn remove(&self, id: u32) {
-        if let Some(removed) = self.nodes.borrow_mut().remove(&id) {
+        let result = self.nodes.borrow_mut().remove(&id); // for borrow lifetime
+        if let Some(removed) = result {
             debug!("removing node {id} from tracker");
             self.update(removed.class);
         }
@@ -288,6 +289,7 @@ impl NodeTracker {
         trace!("updating device params for {id}");
 
         let mut route = None;
+        let mut index = None;
         let mut node_params = None;
 
         match PodDeserializer::deserialize_any_from(params.as_bytes()) {
@@ -297,6 +299,9 @@ impl NodeTracker {
                     match (prop.key, prop.value) {
                         (sys::SPA_PARAM_ROUTE_device, Value::Int(value)) => {
                             route = Some(value as u32)
+                        }
+                        (sys::SPA_PARAM_ROUTE_index, Value::Int(value)) => {
+                            index = Some(value as u32)
                         }
                         (sys::SPA_PARAM_ROUTE_props, Value::Object(value)) => {
                             node_params = Some(value)
@@ -310,14 +315,20 @@ impl NodeTracker {
             }
         }
 
-        if let (Some(route), Some(params)) = (route, node_params) {
+        if let (Some(route), Some(index), Some(params)) = (route, index, node_params) {
             let mut changed = None;
+
+            if let Some(device) = self.devices.borrow_mut().get_mut(&id) {
+                device.indices.insert(route, index);
+            } else {
+                warn!("received route index update for device {id} that does not exist");
+            }
 
             if let Some(node) = self
                 .nodes
                 .borrow_mut()
                 .values_mut()
-                .find(|node| node.device == Some(id) && node.state.profile == Some(route))
+                .find(|node| node.device == Some(id) && node.state.route == Some(route))
             {
                 if node.state.update_params(&params) {
                     changed = Some(node.class);
@@ -432,19 +443,66 @@ impl NodeTracker {
             return;
         };
 
-        let Ok(bytes) = PodSerializer::serialize(Cursor::new(Vec::new()), &Value::Object(object))
-            .map(|(c, _)| c.into_inner())
-        else {
-            warn!("failed to serialize property for node '{name}'");
-            return;
-        };
+        if let Some(device_id) = node.device {
+            trace!("setting properties on device {device_id} for `{}`", node.state.name);
+            let Some(route) = node.state.route else {
+                error!("no route found for node `{}`", node.state.name);
+                return;
+            };
 
-        let Some(pod) = Pod::from_bytes(&bytes) else {
-            warn!("failed to create pod from bytes for node '{name}'");
-            return;
-        };
+            let state = self.devices.borrow();
+            let Some(device) = state.get(&device_id) else {
+                error!("device {device_id} was not tracked, cannot set property");
+                return;
+            };
 
-        node.proxy.set_param(ParamType::Props, 0, pod);
+            let Some(index) = device.indices.get(&route) else {
+                error!("no index for route {route} of device {device_id}");
+                return;
+            };
+
+            let flags = PropertyFlags::empty();
+            let object = object! {
+                SpaTypes::ObjectParamRoute,
+                ParamType::Route,
+                Property { key: SPA_PARAM_ROUTE_device, value: Value::Int(route as i32), flags },
+                Property { key: SPA_PARAM_ROUTE_index, value: Value::Int(*index as i32), flags },
+                Property { key: SPA_PARAM_ROUTE_props, value: Value::Object(object), flags },
+                Property { key: SPA_PARAM_ROUTE_save, value: Value::Bool(true), flags },
+            };
+
+            let Ok(bytes) =
+                PodSerializer::serialize(Cursor::new(Vec::new()), &Value::Object(object))
+                    .map(|(c, _)| c.into_inner())
+            else {
+                error!("failed to serialize property for node '{name}'");
+                return;
+            };
+
+            let Some(pod) = Pod::from_bytes(&bytes) else {
+                error!("failed to create pod from bytes for node '{name}'");
+                return;
+            };
+
+            device.proxy.set_param(ParamType::Route, 0, pod);
+        } else {
+            trace!("setting properties directly `{}`", node.state.name);
+
+            let Ok(bytes) =
+                PodSerializer::serialize(Cursor::new(Vec::new()), &Value::Object(object))
+                    .map(|(c, _)| c.into_inner())
+            else {
+                error!("failed to serialize property for node '{name}'");
+                return;
+            };
+
+            let Some(pod) = Pod::from_bytes(&bytes) else {
+                error!("failed to create pod from bytes for node '{name}'");
+                return;
+            };
+
+            node.proxy.set_param(ParamType::Props, 0, pod);
+        }
     }
 
     /// triggers a manual update in the channel
