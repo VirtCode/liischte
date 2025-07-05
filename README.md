@@ -72,6 +72,9 @@ modules = ["power", "audio", "network"]
     # border for opaque objects
     border = "#555555"
 
+    # opacity of the background in two-tone icons
+    tone_opacity = 0.25
+
     # font to use for text on the bar
     font = "Jetbrains Mono"
 

@@ -5,6 +5,8 @@ use futures::{StreamExt, stream};
 use iced::{
     Element, Renderer, Subscription, Task, Theme,
     advanced::subscription::{EventStream, Hasher, Recipe, from_recipe},
+    color,
+    widget::stack,
 };
 use iced_winit::futures::BoxStream;
 use liischte_lib::networkmanager::{
@@ -59,8 +61,8 @@ impl NewtorkModule {
             primary: None,
             primary_path: None,
 
-            wireless_strength: 1f64,
-            cellular_strength: 1f64,
+            wireless_strength: 0f64,
+            cellular_strength: 0f64,
         })
     }
 }
@@ -136,25 +138,42 @@ impl Module for NewtorkModule {
     fn render_status(&self) -> Element<'_, Self::Message, Theme, Renderer> {
         let Some(ref primary) = self.primary else { return icon(Icon::Ban).into() };
 
-        let symbol = match primary.kind {
-            ActiveConnectionKind::Wired => Icon::ChevronsLeftRightEllipsis,
-            ActiveConnectionKind::Wireless => match () {
-                _ if self.wireless_strength > 0.75 => Icon::Wifi,
-                _ if self.wireless_strength > 0.50 => Icon::WifiHigh,
-                _ if self.wireless_strength > 0.25 => Icon::WifiLow,
-                _ => Icon::WifiZero,
-            },
-            ActiveConnectionKind::Cellular => match () {
-                _ if self.cellular_strength > 0.8 => Icon::Signal,
-                _ if self.cellular_strength > 0.6 => Icon::SignalHigh,
-                _ if self.cellular_strength > 0.4 => Icon::SignalMedium,
-                _ if self.cellular_strength > 0.2 => Icon::SignalLow,
-                _ => Icon::SignalZero,
-            },
-            ActiveConnectionKind::Unknown(_) => Icon::Waypoints,
+        let (symbol, background) = match primary.kind {
+            ActiveConnectionKind::Wired => (Icon::ChevronsLeftRightEllipsis, None),
+            ActiveConnectionKind::Wireless => (
+                match () {
+                    _ if self.wireless_strength > 0.75 => Icon::Wifi,
+                    _ if self.wireless_strength > 0.50 => Icon::WifiHigh,
+                    _ if self.wireless_strength > 0.25 => Icon::WifiLow,
+                    _ => Icon::WifiZero,
+                },
+                Some(Icon::Wifi),
+            ),
+            ActiveConnectionKind::Cellular => (
+                match () {
+                    _ if self.cellular_strength > 0.8 => Icon::Signal,
+                    _ if self.cellular_strength > 0.6 => Icon::SignalHigh,
+                    _ if self.cellular_strength > 0.4 => Icon::SignalMedium,
+                    _ if self.cellular_strength > 0.2 => Icon::SignalLow,
+                    _ => Icon::SignalZero,
+                },
+                Some(Icon::Signal),
+            ),
+            ActiveConnectionKind::Unknown(_) => (Icon::Waypoints, None),
         };
 
-        icon(symbol).into()
+        if CONFIG.looks.tone_opacity != 0.0
+            && let Some(background) = background
+        {
+            stack![
+                icon(background)
+                    .color(CONFIG.looks.foreground.scale_alpha(CONFIG.looks.tone_opacity)),
+                icon(symbol)
+            ]
+            .into()
+        } else {
+            icon(symbol).into()
+        }
     }
 }
 

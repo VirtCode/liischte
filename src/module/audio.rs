@@ -5,7 +5,7 @@ use iced::{
     advanced::subscription::{EventStream, Hasher, Recipe, from_recipe},
     alignment::Horizontal,
     mouse::ScrollDelta,
-    widget::{column, mouse_area},
+    widget::{column, mouse_area, stack},
 };
 use iced_winit::futures::BoxStream;
 use liischte_lib::{
@@ -133,16 +133,23 @@ impl Module for AudioModule {
             return icon(Icon::VolumeOff).into();
         };
 
-        let icon = if sink.mute {
-            icon(Icon::VolumeX)
+        let icon: Element<'_, Self::Message, Theme, Renderer> = if sink.mute {
+            icon(Icon::VolumeX).into()
         } else {
             let volume = sink.volume.iter().sum::<f32>() / sink.volume.len() as f32;
 
-            match () {
-                _ if volume <= 0.33 => icon(Icon::Volume),
-                _ if volume <= 0.66 => icon(Icon::Volume1),
-                _ => icon(Icon::Volume2),
-            }
+            let symbol = match () {
+                _ if volume <= 0.33 => Icon::Volume,
+                _ if volume <= 0.66 => Icon::Volume1,
+                _ => Icon::Volume2,
+            };
+
+            stack![
+                icon(Icon::Volume2)
+                    .color(CONFIG.looks.foreground.scale_alpha(CONFIG.looks.tone_opacity)),
+                icon(symbol)
+            ]
+            .into()
         };
 
         mouse_area(icon)

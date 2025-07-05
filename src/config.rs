@@ -157,6 +157,9 @@ pub struct ConfigLooks {
     #[serde(deserialize_with = "deserialize_color")]
     pub border: Color,
 
+    /// opacity of the background in two-tone icons
+    pub tone_opacity: f32,
+
     /// font to use for text on the bar
     pub font: String,
 
@@ -173,6 +176,7 @@ impl Default for ConfigLooks {
             semi: color!(0xFFFFFF, 0.6),
             background: color!(0x000000, 0.6),
             border: color!(0x555555),
+            tone_opacity: 0.25,
             padding: 10,
             width: 40,
             font: "JetBrains Mono".to_string(),
