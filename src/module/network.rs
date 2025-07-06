@@ -5,7 +5,6 @@ use futures::{StreamExt, stream};
 use iced::{
     Element, Renderer, Subscription, Task, Theme,
     advanced::subscription::{EventStream, Hasher, Recipe, from_recipe},
-    color,
     widget::stack,
 };
 use iced_winit::futures::BoxStream;

@@ -29,6 +29,8 @@ indexmap = "2.9.0"
 
 lucide-icons = "0.507.0"
 
+notify-rust = { version = "4.11.7", features = ["d"] }
+
 # stuff used for abstraction
 downcast = "0.11.0"
 dyn-clone = "1.0.19"

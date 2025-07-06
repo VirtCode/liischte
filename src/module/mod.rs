@@ -13,6 +13,7 @@ pub mod backlight;
 pub mod network;
 pub mod power;
 pub mod process;
+pub mod timer;
 
 /// id representing a module (or rather it's message)
 pub type ModuleId = TypeId;

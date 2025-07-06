@@ -30,6 +30,7 @@ use module::{
     network::{NETWORK_MODULE_IDENTIFIER, NewtorkModule},
     power::{POWER_MODULE_IDENTIFIER, PowerModule},
     process::{PROCESS_MODULE_IDENTIFIER, ProcessModule},
+    timer::{TIMER_MODULE_IDENTIFIER, TimerModule},
 };
 use ui::{empty, separator, window::layer_window};
 
@@ -168,6 +169,7 @@ impl Liischte {
                 BACKLIGHT_MODULE_IDENTIFIER => BacklightModule::new().await.map(module::boxed),
                 NETWORK_MODULE_IDENTIFIER => NewtorkModule::new().await.map(module::boxed),
                 PROCESS_MODULE_IDENTIFIER => ProcessModule::new().map(module::boxed),
+                TIMER_MODULE_IDENTIFIER => Ok(module::boxed(TimerModule::new())),
                 AUDIO_MODULE_IDENTIFIER => Ok(module::boxed(AudioModule::new())),
                 status => panic!("status `{status}` does not exist in this version"),
             };

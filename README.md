@@ -36,6 +36,7 @@ For a quick overview about what the bar can do, here's a quick list of the featu
 - **Network and Modem** state showing the currently used connection method as a _status_ which supports wifi and cellular signal strength.
 - **Backlight** change information with a simple _osd_.
 - **Running Processes** which shows an _info_ icon for certain processes defined in the config if they are running.
+- **Timers** which are shown as _infos_ and can be dynamically added via the IPC.
 
 ## technical decisions
 **It is a bar and _not_ a shell.** Things outside that of a bar are explicitly left to other pieces of software. This avoids bloating the scope of this project. For most things in a full shell are either easily done in the terminal or some other projects exist which does mostly what you need (like e.g. [mako](https://github.com/emersion/mako) for notifications). The singular exception to this is the inbuilt OSD, but that is because the bar (e.g. volume changing) would be barely useable without.
@@ -180,6 +181,30 @@ To update this module on demand (to get immediate feedback in the bar despite lo
 This means if you **have ipc support enabled**:
 ```
 liischte pass process rescan
+```
+
+### `timer`
+This module can show different timers as infos in the bar. The timers can be added on runtime using the ipc and will be tracked by the module. It will display a system notification upon completion of a timer.
+
+```toml
+[module.timer]
+    # default icon to show if none is set
+    default_icon = "alarm_clock"
+
+    # heading to show in the notification
+    heading = "Timer Expired!"
+    # set notification to never expire
+    persistent = true
+```
+
+As mentioned, to add a timer to this module, you have to use the IPC. This means you'll need to have **ipc support enabled** if you intend to use this module. The module takes multiple arguments in a special syntax. The arguments supported are:
+- `duration` as the duration in seconds
+- `icon` (optional) name of the lucide icon to show in the bar
+- `message` (optional) message to show in the notification
+
+This means that you can for example run:
+```
+liischte pass timer "duration=60|icon=soup|message=Your soup is ready to eat."
 ```
 
 ## installation
