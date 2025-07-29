@@ -16,7 +16,7 @@ use crate::{
     config::CONFIG,
     module::{Module, ModuleMessage},
     osd::OsdId,
-    ui::{PILL_RADIUS, icon_char},
+    ui::{PILL_RADIUS, icon},
 };
 
 pub const TIMER_MODULE_IDENTIFIER: &str = "timer";
@@ -48,7 +48,7 @@ impl Default for TimerModuleConfig {
 impl ModuleMessage for TimerMessage {}
 #[derive(Clone, Debug)]
 pub enum TimerMessage {
-    Create(char, String, Duration),
+    Create(Icon, String, Duration),
     Stop,
     Ok,
 }
@@ -60,7 +60,7 @@ pub struct TimerModule {
 }
 
 pub struct Timer {
-    icon: char,
+    icon: Icon,
     message: String,
 
     start: Instant,
@@ -120,8 +120,7 @@ impl Module for TimerModule {
         };
 
         Some(TimerMessage::Create(
-            icon.unwrap_or(Icon::from_name(&self.config.default_icon).unwrap_or(Icon::Clock))
-                .unicode(),
+            icon.unwrap_or(Icon::from_name(&self.config.default_icon).unwrap_or(Icon::Clock)),
             desc.unwrap_or(format!("{} seconds have elapsed", duration.as_secs())),
             duration,
         ))
@@ -187,7 +186,7 @@ impl Module for TimerModule {
             .iter()
             .map(|timer| {
                 column![
-                    icon_char(timer.icon),
+                    icon(timer.icon),
                     progress_bar(
                         0.0..=1.0,
                         1.0 - (Instant::now() - timer.start).as_secs_f32()

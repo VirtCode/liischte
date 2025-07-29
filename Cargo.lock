@@ -2169,9 +2169,9 @@ checksum = "13dc2df351e3202783a1fe0d44375f7295ffb4049267b0f3018346dc122a1d94"
 
 [[package]]
 name = "lucide-icons"
-version = "0.507.0"
+version = "0.532.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ad7325835c743cc5070ce8acabd51ab98404b12b32183a933171ed201d8ae7df"
+checksum = "33d1cf1545c8355325e4eea98e4bc552314be9e181404e84973c02be5b1da89c"
 
 [[package]]
 name = "mac-notification-sys"

@@ -18,7 +18,7 @@ use crate::{
     config::CONFIG,
     module::{Module, ModuleMessage},
     osd::OsdId,
-    ui::icon_char,
+    ui::icon,
 };
 
 pub const PROCESS_MODULE_IDENTIFIER: &str = "process";
@@ -61,10 +61,10 @@ pub enum ProcessMessage {
 
 pub struct ProcessModule {
     rate: Duration,
-    config: Vec<(String, char)>,
+    config: Vec<(String, Icon)>,
 
     /// this is actually the current state
-    icons: Vec<(u64, char)>,
+    icons: Vec<(u64, Icon)>,
 }
 
 impl ProcessModule {
@@ -78,7 +78,7 @@ impl ProcessModule {
                 let icon = Icon::from_name(&item.icon)
                     .with_context(|| format!("icon `{}` not recognized", item.icon))?;
 
-                Ok((item.cmdline, icon.unicode()))
+                Ok((item.cmdline, icon))
             })
             .collect::<Result<_>>()?;
 
@@ -154,7 +154,7 @@ impl Module for ProcessModule {
     fn render_info(&self) -> Vec<Element<'_, Self::Message, Theme, Renderer>> {
         self.icons
             .iter()
-            .map(|(pid, c)| mouse_area(icon_char(*c)).on_release(Self::Message::Stop(*pid)).into())
+            .map(|(pid, c)| mouse_area(icon(*c)).on_release(Self::Message::Stop(*pid)).into())
             .collect::<Vec<_>>()
     }
 }

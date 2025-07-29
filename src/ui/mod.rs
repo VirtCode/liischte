@@ -36,12 +36,6 @@ pub fn icon<'a>(icon: Icon) -> Text<'a> {
     text(icon.unicode()).font(Font::with_name("lucide")).size(24)
 }
 
-/// creates an icon with the lucide icon font (from a char)
-/// TODO: remove me once Icon is copy
-pub fn icon_char<'a>(icon: char) -> Text<'a> {
-    text(icon).font(Font::with_name("lucide")).size(24)
-}
-
 /// creates an empty widget
 pub fn empty() -> Space {
     Space::new(0, 0)
