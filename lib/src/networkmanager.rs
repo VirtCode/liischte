@@ -349,7 +349,7 @@ impl<'a> TrackedActiveConnection<'a> {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ActiveConnection {
     /// dbus path of the connection (see primary connection)
     pub path: OwnedObjectPath,
@@ -400,6 +400,8 @@ pub enum ActiveConnectionKind {
     Wireless,
     /// this is a cellular connection
     Cellular,
+    /// this is a wireguard uplink
+    Wireguard,
     /// type not known
     Unknown(String),
 }
@@ -410,6 +412,7 @@ impl ActiveConnectionKind {
             "802-3-ethernet" => Self::Wired,
             "802-11-wireless" => Self::Wireless,
             "gsm" => Self::Cellular,
+            "wireguard" => Self::Wireguard,
             a => Self::Unknown(a.to_owned()),
         }
     }

@@ -186,10 +186,12 @@ liischte pass process rescan
 ### `timer`
 This module can show different timers as infos in the bar. The timers can be added on runtime using the ipc and will be tracked by the module. It will display a system notification upon completion of a timer.
 
+**Note: The _visual_ progress of a timer will only update if another widget ticks, this means if the seconds of the clock have been disabled, the visuals might not appear the most responsive. Completion time is accurate in any case.**
+
 ```toml
 [module.timer]
     # default icon to show if none is set
-    default_icon = "alarm_clock"
+    default_icon = "alarm-clock"
 
     # heading to show in the notification
     heading = "Timer Expired!"

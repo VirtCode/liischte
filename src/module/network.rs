@@ -158,7 +158,7 @@ impl Module for NewtorkModule {
                 },
                 Some(Icon::Signal),
             ),
-            ActiveConnectionKind::Unknown(_) => (Icon::Waypoints, None),
+            _ => (Icon::Waypoints, None),
         };
 
         if CONFIG.looks.tone_opacity != 0.0
