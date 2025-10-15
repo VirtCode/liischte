@@ -223,9 +223,9 @@ where
             renderer::Quad {
                 bounds: Rectangle {
                     x: (bounds.x + 5.0).floor(),
-                    y: (bounds.y + 15.0).floor() + ALIASING,
+                    y: (bounds.y + 14.0).floor() + ALIASING,
                     width: 10.0 * self.0,
-                    height: 4.0 - ALIASING * 2.0,
+                    height: 6.0 - ALIASING * 2.0,
                 },
                 ..renderer::Quad::default()
             },
