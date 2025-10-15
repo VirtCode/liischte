@@ -153,12 +153,9 @@ impl Module for AudioModule {
         };
 
         mouse_area(icon)
-            .on_scroll(|event| {
-                if let ScrollDelta::Pixels { y, .. } = event {
-                    AudioMessage::ChangeVolume(if y < 0f32 { -0.05 } else { 0.05 })
-                } else {
-                    AudioMessage::Ok
-                }
+            .on_scroll(|event| match event {
+                ScrollDelta::Lines { y, .. } => AudioMessage::ChangeVolume(y * 0.05),
+                ScrollDelta::Pixels { y, .. } => AudioMessage::ChangeVolume(y * -0.005), // natural scrolling, fear me
             })
             .on_release(AudioMessage::ToggleMute)
             .into()

@@ -121,12 +121,10 @@ impl Hyprland {
             )
             .spacing(8),
         )
-        .on_scroll(|event| {
-            if let ScrollDelta::Pixels { y, .. } = event {
-                HyprlandMessage::SelectRelative(if y > 0f32 { -1 } else { 1 })
-            } else {
-                HyprlandMessage::Ok
-            }
+        .on_scroll(|event| match event {
+            ScrollDelta::Lines { y, .. } if y > 0f32 => HyprlandMessage::SelectRelative(-1),
+            ScrollDelta::Lines { y, .. } if y < 0f32 => HyprlandMessage::SelectRelative(1),
+            _ => HyprlandMessage::Ok,
         })
         .into()
     }
