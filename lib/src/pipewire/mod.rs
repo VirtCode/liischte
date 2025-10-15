@@ -5,9 +5,9 @@ use futures::StreamExt;
 use log::{trace, warn};
 use pipewire::{
     channel::{self as pwchannel, Receiver as PwReceiver, Sender as PwSender},
-    context::Context,
-    main_loop::MainLoop,
-    registry::{GlobalObject, Registry},
+    context::ContextRc,
+    main_loop::MainLoopRc,
+    registry::{GlobalObject, RegistryRc},
     spa::utils::dict::DictRef,
 };
 use tokio::sync::broadcast::{self, Receiver as BcReceiver, Sender as BcSender};
@@ -125,7 +125,7 @@ enum PipewireAction {
 }
 
 struct PipewireThread {
-    registry: Rc<Registry>,
+    registry: RegistryRc,
 
     default: DefaultTracker,
     nodes: Rc<NodeTracker>,
@@ -138,15 +138,16 @@ impl PipewireThread {
         defaults: BcSender<DefaultState>,
         actions: PwReceiver<PipewireAction>,
     ) -> Result<()> {
-        let mainloop = MainLoop::new(None).context("failed to create new pipewire mainloop")?;
+        let mainloop = MainLoopRc::new(None).context("failed to create new pipewire mainloop")?;
 
         trace!("connecting to pipewire");
-        let context = Context::new(&mainloop).context("failed to create pipewire context")?;
-        let core = context.connect(None).context("failed to connect to pipewire")?;
-        let registry = core.get_registry().context("failed to retrieve pipewire registry")?;
+        let context =
+            ContextRc::new(&mainloop, None).context("failed to create pipewire context")?;
+        let core = context.connect_rc(None).context("failed to connect to pipewire")?;
+        let registry = core.get_registry_rc().context("failed to retrieve pipewire registry")?;
 
         let state = Rc::new(Self {
-            registry: Rc::new(registry),
+            registry: registry,
 
             default: DefaultTracker::new(defaults),
             nodes: Rc::new(NodeTracker::new(sinks, sources)),

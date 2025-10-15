@@ -22,7 +22,7 @@ use iced_winit::commands::{
 };
 use indexmap::IndexMap;
 use log::{error, info};
-use lucide_icons::lucide_font_bytes;
+use lucide_icons::LUCIDE_FONT_BYTES;
 use module::{
     AbstractModule, ModuleMessage,
     audio::{AUDIO_MODULE_IDENTIFIER, AudioModule},
@@ -87,7 +87,7 @@ async fn main() -> Result<()> {
         default_font: Font::with_name(&CONFIG.looks.font),
         default_text_size: 16.into(),
         antialiasing: true,
-        fonts: vec![lucide_font_bytes().into()],
+        fonts: vec![LUCIDE_FONT_BYTES.into()],
         ..Default::default()
     });
 

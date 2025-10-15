@@ -6,32 +6,32 @@ edition = "2024"
 [dependencies]
 liischte-lib = { path = "lib" }
 
-chrono = "0.4.40"
-anyhow = "*"
+chrono = "0.4.42"
+anyhow = "1.0.100"
 
-tokio = { version = "1.44.1", features = ["rt-multi-thread", "macros"] }
+tokio = { version = "1.48.0", features = ["rt-multi-thread", "macros"] }
 tokio-stream = { version = "0.1.17", features = ["sync"] }
 futures = "0.3.31"
 
 # we use our own fork of cosmic's iced fork
 iced = { git = "https://github.com/VirtCode/iced.git", features = ["advanced", "tokio", "winit", "wayland", "multi-window"] }
 iced_winit = { git = "https://github.com/VirtCode/iced.git", features = ["wayland", "multi-window"], default-features = false }
-wayland-client = "0.31.10"
+wayland-client = "0.31.11"
 
-clap = { version = "4.5.32", features = [ "derive" ] }
-log = "0.4.27"
+clap = { version = "4.5.49", features = [ "derive" ] }
+log = "0.4.28"
 env_logger = "0.11.7"
 
-serde = { version = "1.0.219", features = ["derive"] }
-serde_json = "1.0.140"
-toml = "0.8.22"
-indexmap = "2.9.0"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.145"
+toml = "0.8.23"
+indexmap = "2.11.4"
 
-lucide-icons = "0.532.0"
+lucide-icons = "0.545.0"
 
 notify-rust = { version = "4.11.7", features = ["d"] }
 
 # stuff used for abstraction
 downcast = "0.11.0"
-dyn-clone = "1.0.19"
-async-trait = "0.1.88"
+dyn-clone = "1.0.20"
+async-trait = "0.1.89"
