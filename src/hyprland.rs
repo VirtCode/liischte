@@ -45,6 +45,7 @@ impl Hyprland {
 
         let mut workspaces = instance.get_all_workspaces().await?;
         workspaces.retain(|state| state.monitor_id == Some(config.monitor) && state.id >= 0);
+        workspaces.sort_by(|a, b| a.id.cmp(&b.id));
 
         Ok(Self { config, instance, selected, workspaces })
     }
@@ -56,7 +57,10 @@ impl Hyprland {
 
     pub fn update(&mut self, message: HyprlandMessage) -> Task<HyprlandMessage> {
         match message {
-            HyprlandMessage::State(selected, workspaces) => {
+            HyprlandMessage::State(selected, mut workspaces) => {
+                // sort by id if they are created out of order
+                workspaces.sort_by(|a, b| a.id.cmp(&b.id));
+
                 self.selected = selected;
                 self.workspaces = workspaces;
             }
