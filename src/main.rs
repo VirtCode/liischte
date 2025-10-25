@@ -17,7 +17,7 @@ use iced::{
     window::Id as SurfaceId,
 };
 use iced_winit::commands::{
-    layer_surface::get_layer_surface,
+    layer_surface::{get_layer_surface, set_layer},
     subsurface::{Anchor, Layer},
 };
 use indexmap::IndexMap;
@@ -68,6 +68,10 @@ async fn main() -> Result<()> {
     match read_command() {
         Some(Command::Pass { module, message }) => {
             ipc::send(IpcMessage::ModuleUpdate(module, message)).await?;
+            return Ok(());
+        }
+        Some(Command::Layer { layer }) => {
+            ipc::send(IpcMessage::LayerChange(layer)).await?;
             return Ok(());
         }
         None => {}
@@ -200,7 +204,7 @@ impl Liischte {
             output,
             id: self.surface,
 
-            layer: Layer::Top,
+            layer: CONFIG.layer.into(),
             anchor: Anchor::TOP
                 | if CONFIG.right { Anchor::RIGHT } else { Anchor::LEFT }
                 | Anchor::BOTTOM,
@@ -286,6 +290,9 @@ impl Liischte {
                         info!("module `{module}` not found when passing message");
                         Task::none()
                     }
+                }
+                IpcMessage::LayerChange(layer) => {
+                    set_layer(self.surface, layer.unwrap_or(CONFIG.layer).into())
                 }
             },
         }

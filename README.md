@@ -51,6 +51,8 @@ Configuration is done in `toml` under `$XDG_CONFIG_HOME/.config/liischte.toml`. 
 ```toml
 # layer namespace to use (with `-osd` for the osd)
 namespace = "liischte"
+# layer level to show bar at (`overlay`, `top`, `bottom` or `background`)
+layer = "top"
 # whether to show the bar on the left instead of the right
 right = false
 # output to show the bar on (name, or description with a `desc:` prefix)
@@ -88,6 +90,9 @@ modules = ["power", "audio", "network"]
 [osd]
     # is the osd enabled
     enabled = true
+
+    # layer level to show osd at (`overlay`, `top`, `bottom` or `background`)
+    layer = "overlay"
 
     # how long to show the osd for an event in millis
     timeout = 4000
@@ -208,6 +213,11 @@ This means that you can for example run:
 ```
 liischte pass timer "duration=60|icon=soup|message=Your soup is ready to eat."
 ```
+
+## cli
+The _liischte_ binary also acts as a cli to communicate with a running instance of liischte if it is passed with arguments. There are a few commands which are supported at the moment:
+- `pass <module> <message>`: This command passes a string (`<message>`) to a module (`<module>`), to trigger certain module-specific features. See above for how certain modules react to messages (e.g. the `timer` module).
+- `layer <layer?>`: This command changes the wlr-layer-shell layer (`<layer?>`) the bar is currently being shown on. The `<layer?>` property is optional, if it is empty the configured layer will be set. This function can be used to temporarily show the bar over fullscreen applications (with the `overlay` layer).
 
 ## installation
 You can use liischte yourself by building it manually using `cargo build --release`. If you are using [Arch Linux](https://archlinux.org) you can also use the [`PKGBUILD`](PKGBUILD) file found in this repository to build a package with.

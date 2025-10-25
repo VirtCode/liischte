@@ -133,7 +133,7 @@ impl OsdHandler {
             output,
             id: self.surface,
 
-            layer: Layer::Overlay,
+            layer: CONFIG.osd.layer.into(),
             anchor: Anchor::TOP
                 | if CONFIG.right { Anchor::RIGHT } else { Anchor::LEFT }
                 | Anchor::BOTTOM,

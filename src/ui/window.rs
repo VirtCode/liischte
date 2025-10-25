@@ -8,6 +8,9 @@ use iced::{
     runtime::{Appearance, DefaultStyle},
 };
 use iced::{Element, Result, Settings, Subscription, Task};
+use iced_winit::commands::subsurface::Layer;
+use serde::Deserialize;
+use serde::Serialize;
 
 use std::marker::PhantomData;
 
@@ -227,5 +230,25 @@ where
         window: window::Id,
     ) -> impl Into<Element<'a, Message, Theme, Renderer>> {
         self(state, window)
+    }
+}
+
+#[derive(Clone, Copy, Deserialize, Serialize, Debug, clap::ValueEnum)]
+#[serde(rename_all = "kebab-case")]
+pub enum WindowLayer {
+    Overlay,
+    Top,
+    Bottom,
+    Background,
+}
+
+impl From<WindowLayer> for Layer {
+    fn from(val: WindowLayer) -> Self {
+        match val {
+            WindowLayer::Overlay => Layer::Overlay,
+            WindowLayer::Top => Layer::Top,
+            WindowLayer::Bottom => Layer::Bottom,
+            WindowLayer::Background => Layer::Background,
+        }
     }
 }

@@ -18,6 +18,8 @@ use tokio::{
 };
 use tokio_stream::wrappers::BroadcastStream;
 
+use crate::ui::window::WindowLayer;
+
 /// path where the unix socket is located
 fn socket_path() -> PathBuf {
     if let Ok(path) = env::var("LIISCHTE_SOCKET") {
@@ -33,6 +35,7 @@ fn socket_path() -> PathBuf {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum IpcMessage {
     ModuleUpdate(String, String),
+    LayerChange(Option<WindowLayer>),
 }
 
 /// this implements an ipc server which can receive messages

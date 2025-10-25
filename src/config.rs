@@ -13,9 +13,12 @@ use log::{debug, error, info};
 use serde::{Deserialize, Deserializer};
 use toml::Table;
 
-use crate::module::{
-    audio::AUDIO_MODULE_IDENTIFIER, network::NETWORK_MODULE_IDENTIFIER,
-    power::POWER_MODULE_IDENTIFIER,
+use crate::{
+    module::{
+        audio::AUDIO_MODULE_IDENTIFIER, network::NETWORK_MODULE_IDENTIFIER,
+        power::POWER_MODULE_IDENTIFIER,
+    },
+    ui::window::WindowLayer,
 };
 
 /// path where the config is read from
@@ -60,6 +63,8 @@ pub static CONFIG: LazyLock<Config> = LazyLock::new(|| {
 pub struct Config {
     /// layer namespace to use (with `-osd` for the osd)
     pub namespace: String,
+    /// layer to show bar on
+    pub layer: WindowLayer,
     /// whether to show the bar on the left instead of the right
     pub right: bool,
     /// output to show the bar on (name, or description with a `desc:` prefix)
@@ -89,6 +94,7 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             namespace: "liischte".to_string(),
+            layer: WindowLayer::Top,
             right: false,
             output: "active".to_string(),
             ipc: true,
@@ -190,6 +196,9 @@ pub struct ConfigOsd {
     /// is the osd enabled
     pub enabled: bool,
 
+    /// layer the osd is rendered on
+    pub layer: WindowLayer,
+
     /// how long to show the osd for an event in millis
     pub timeout: u64,
 
@@ -200,7 +209,7 @@ pub struct ConfigOsd {
 
 impl Default for ConfigOsd {
     fn default() -> Self {
-        Self { enabled: true, timeout: 4000, respawn_time: 200 }
+        Self { enabled: true, layer: WindowLayer::Overlay, timeout: 4000, respawn_time: 200 }
     }
 }
 

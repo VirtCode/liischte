@@ -996,7 +996,7 @@ dependencies = [
 [[package]]
 name = "cosmic-text"
 version = "0.14.2"
-source = "git+https://github.com/pop-os/cosmic-text.git#d409ddd1d32c222f3c0b8c06a286172b157613f3"
+source = "git+https://github.com/pop-os/cosmic-text.git#cffdea2b334e7830a5fd6f95bf5e1784014442a8"
 dependencies = [
  "bitflags 2.9.4",
  "fontdb",
@@ -1683,7 +1683,7 @@ dependencies = [
 [[package]]
 name = "iced"
 version = "0.14.0-dev"
-source = "git+https://github.com/VirtCode/iced.git#877c8a7a6726c7a840985438d1495c9c10d45652"
+source = "git+https://github.com/VirtCode/iced.git#2e19b8cf227eaf5e91650b7838fbe806b960f4c1"
 dependencies = [
  "dnd",
  "iced_accessibility",
@@ -1700,7 +1700,7 @@ dependencies = [
 [[package]]
 name = "iced_accessibility"
 version = "0.1.0"
-source = "git+https://github.com/VirtCode/iced.git#877c8a7a6726c7a840985438d1495c9c10d45652"
+source = "git+https://github.com/VirtCode/iced.git#2e19b8cf227eaf5e91650b7838fbe806b960f4c1"
 dependencies = [
  "accesskit",
  "accesskit_winit",
@@ -1709,7 +1709,7 @@ dependencies = [
 [[package]]
 name = "iced_core"
 version = "0.14.0-dev"
-source = "git+https://github.com/VirtCode/iced.git#877c8a7a6726c7a840985438d1495c9c10d45652"
+source = "git+https://github.com/VirtCode/iced.git#2e19b8cf227eaf5e91650b7838fbe806b960f4c1"
 dependencies = [
  "bitflags 2.9.4",
  "bytes",
@@ -1732,7 +1732,7 @@ dependencies = [
 [[package]]
 name = "iced_futures"
 version = "0.14.0-dev"
-source = "git+https://github.com/VirtCode/iced.git#877c8a7a6726c7a840985438d1495c9c10d45652"
+source = "git+https://github.com/VirtCode/iced.git#2e19b8cf227eaf5e91650b7838fbe806b960f4c1"
 dependencies = [
  "futures",
  "iced_core",
@@ -1746,7 +1746,7 @@ dependencies = [
 [[package]]
 name = "iced_graphics"
 version = "0.14.0-dev"
-source = "git+https://github.com/VirtCode/iced.git#877c8a7a6726c7a840985438d1495c9c10d45652"
+source = "git+https://github.com/VirtCode/iced.git#2e19b8cf227eaf5e91650b7838fbe806b960f4c1"
 dependencies = [
  "bitflags 2.9.4",
  "bytemuck",
@@ -1765,7 +1765,7 @@ dependencies = [
 [[package]]
 name = "iced_renderer"
 version = "0.14.0-dev"
-source = "git+https://github.com/VirtCode/iced.git#877c8a7a6726c7a840985438d1495c9c10d45652"
+source = "git+https://github.com/VirtCode/iced.git#2e19b8cf227eaf5e91650b7838fbe806b960f4c1"
 dependencies = [
  "iced_graphics",
  "iced_tiny_skia",
@@ -1776,7 +1776,7 @@ dependencies = [
 [[package]]
 name = "iced_runtime"
 version = "0.14.0-dev"
-source = "git+https://github.com/VirtCode/iced.git#877c8a7a6726c7a840985438d1495c9c10d45652"
+source = "git+https://github.com/VirtCode/iced.git#2e19b8cf227eaf5e91650b7838fbe806b960f4c1"
 dependencies = [
  "bytes",
  "cosmic-client-toolkit",
@@ -1791,7 +1791,7 @@ dependencies = [
 [[package]]
 name = "iced_tiny_skia"
 version = "0.14.0-dev"
-source = "git+https://github.com/VirtCode/iced.git#877c8a7a6726c7a840985438d1495c9c10d45652"
+source = "git+https://github.com/VirtCode/iced.git#2e19b8cf227eaf5e91650b7838fbe806b960f4c1"
 dependencies = [
  "bytemuck",
  "cosmic-text",
@@ -1806,7 +1806,7 @@ dependencies = [
 [[package]]
 name = "iced_widget"
 version = "0.14.0-dev"
-source = "git+https://github.com/VirtCode/iced.git#877c8a7a6726c7a840985438d1495c9c10d45652"
+source = "git+https://github.com/VirtCode/iced.git#2e19b8cf227eaf5e91650b7838fbe806b960f4c1"
 dependencies = [
  "cosmic-client-toolkit",
  "dnd",
@@ -1824,7 +1824,7 @@ dependencies = [
 [[package]]
 name = "iced_winit"
 version = "0.14.0-dev"
-source = "git+https://github.com/VirtCode/iced.git#877c8a7a6726c7a840985438d1495c9c10d45652"
+source = "git+https://github.com/VirtCode/iced.git#2e19b8cf227eaf5e91650b7838fbe806b960f4c1"
 dependencies = [
  "cosmic-client-toolkit",
  "dnd",
