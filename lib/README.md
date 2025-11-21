@@ -14,3 +14,4 @@ Here are the features that the _liischte-lib_ already implements. They all corre
 - `modemmanager`: Modem signal strength information and changes. This is an extension on the `networkmanager` feature which can be used to track signal strength of a cellular connection. Uses the `ModemManager` dbus interface.
 - `process`: Lists currently running processes of the system. Uses the `procfs` directly with no additional libraries. For updates, polling is used.
 - `backlight`: Backlight information for the system's integrated displays. Uses the `sysfs` to obtain the data and listens to `udev` events for reactive updates.
+- `mako`: Get and set modes of [mako](https://github.com/emersion/mako). Uses mako's dbus interface.

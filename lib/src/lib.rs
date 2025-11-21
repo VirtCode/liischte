@@ -28,6 +28,10 @@ pub mod sysfs;
 #[cfg(feature = "process")]
 pub mod process;
 
+/// implementation of integration with the mako notification daemon via dbus
+#[cfg(feature = "mako")]
+pub mod mako;
+
 mod util;
 
 /// a boxed stream with a static lifetime

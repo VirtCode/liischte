@@ -4,7 +4,6 @@ use std::collections::HashMap;
 use anyhow::{Context, Result};
 use clock::{Clock, ClockMessage};
 use config::CONFIG;
-use futures::StreamExt;
 use hyprland::{Hyprland, HyprlandMessage};
 use iced::{
     Background, Border, Color, Font, Length, Limits, Padding, Subscription, Task, Theme,
@@ -18,7 +17,7 @@ use iced::{
 };
 use iced_winit::commands::{
     layer_surface::{get_layer_surface, set_layer},
-    subsurface::{Anchor, Layer},
+    subsurface::Anchor,
 };
 use indexmap::IndexMap;
 use log::{error, info};
@@ -39,6 +38,7 @@ use iced::widget::container as create_container;
 use crate::{
     cli::{Command, read_command},
     ipc::{IpcMessage, IpcServer},
+    module::mako::{MAKO_MODULE_IDENTIFIER, MakoModule},
     ui::{
         outputs::{OutputHandler, OutputMessage},
         runtime::ExistingRuntime,
@@ -172,6 +172,7 @@ impl Liischte {
                 POWER_MODULE_IDENTIFIER => PowerModule::new().await.map(module::boxed),
                 BACKLIGHT_MODULE_IDENTIFIER => BacklightModule::new().await.map(module::boxed),
                 NETWORK_MODULE_IDENTIFIER => NewtorkModule::new().await.map(module::boxed),
+                MAKO_MODULE_IDENTIFIER => MakoModule::new().await.map(module::boxed),
                 PROCESS_MODULE_IDENTIFIER => ProcessModule::new().map(module::boxed),
                 TIMER_MODULE_IDENTIFIER => Ok(module::boxed(TimerModule::new())),
                 AUDIO_MODULE_IDENTIFIER => Ok(module::boxed(AudioModule::new())),

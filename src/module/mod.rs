@@ -10,6 +10,7 @@ use crate::osd::OsdId;
 
 pub mod audio;
 pub mod backlight;
+pub mod mako;
 pub mod network;
 pub mod power;
 pub mod process;

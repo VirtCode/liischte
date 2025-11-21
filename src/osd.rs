@@ -10,7 +10,7 @@ use iced::{
 };
 use iced_winit::commands::{
     layer_surface::{destroy_layer_surface, get_layer_surface},
-    subsurface::{Anchor, Layer},
+    subsurface::Anchor,
 };
 use log::debug;
 use tokio::time::sleep;

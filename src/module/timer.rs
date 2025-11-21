@@ -69,9 +69,7 @@ pub struct Timer {
 
 impl TimerModule {
     pub fn new() -> Self {
-        let config: TimerModuleConfig = CONFIG.module(TIMER_MODULE_IDENTIFIER);
-
-        Self { config, timers: vec![] }
+        Self { config: CONFIG.module(TIMER_MODULE_IDENTIFIER), timers: vec![] }
     }
 }
 

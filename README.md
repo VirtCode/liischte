@@ -214,6 +214,17 @@ This means that you can for example run:
 liischte pass timer "duration=60|icon=soup|message=Your soup is ready to eat."
 ```
 
+### `mako`
+This module is an integration for the [mako](https://github.com/emersion/mako) notification daemon, and shows modes mako is in as infos. It uses mako's DBus interface under the hood. 
+
+```toml
+[module.mako]
+    # icons to show for a given mode, other modes will be ignored
+    modes = [
+        { name = "do-not-disturb", icon = "circle-minus" }
+    ]
+```
+
 ## cli
 The _liischte_ binary also acts as a cli to communicate with a running instance of liischte if it is passed with arguments. There are a few commands which are supported at the moment:
 - `pass <module> <message>`: This command passes a string (`<message>`) to a module (`<module>`), to trigger certain module-specific features. See above for how certain modules react to messages (e.g. the `timer` module).
