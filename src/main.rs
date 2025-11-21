@@ -62,7 +62,7 @@ mod ui;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    env_logger::init_from_env(env_logger::Env::new().default_filter_or("info"));
+    env_logger::init_from_env(env_logger::Env::new().default_filter_or("liischte=info"));
 
     // read command from the cli
     match read_command() {

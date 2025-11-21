@@ -5,11 +5,13 @@ use std::{
     path::PathBuf,
     process::exit,
     sync::LazyLock,
+    time::Duration,
 };
 
 use anyhow::{Context, Result, anyhow};
 use iced::{Color, color};
 use log::{debug, error, info};
+use lucide_icons::Icon;
 use serde::{Deserialize, Deserializer};
 use toml::Table;
 
@@ -35,7 +37,7 @@ fn config_path() -> Result<PathBuf> {
 }
 
 /// deserializes a color from a toml string
-fn deserialize_color<'de, D>(deserializer: D) -> Result<Color, D::Error>
+pub fn deserialize_color<'de, D>(deserializer: D) -> Result<Color, D::Error>
 where
     D: Deserializer<'de>,
 {
@@ -43,6 +45,24 @@ where
 
     Color::parse(&string)
         .ok_or(serde::de::Error::unknown_variant(&string, &["#RRGGBB", "#RRGGBBAA"]))
+}
+
+/// deserializes an icon from a toml string
+pub fn deserialize_icon<'de, D>(deserializer: D) -> Result<Icon, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let string = String::deserialize(deserializer)?;
+
+    Icon::from_name(&string).ok_or(serde::de::Error::custom("not a valid lucide icon name"))
+}
+
+/// deserializes a duration from a toml integer as seconds
+pub fn deserialize_duration_seconds<'de, D>(deserializer: D) -> Result<Duration, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    u64::deserialize(deserializer).map(Duration::from_secs)
 }
 
 pub static CONFIG: LazyLock<Config> = LazyLock::new(|| {

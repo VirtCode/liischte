@@ -13,7 +13,7 @@ use serde::Deserialize;
 use tokio::time::sleep;
 
 use crate::{
-    config::CONFIG,
+    config::{CONFIG, deserialize_icon},
     module::{Module, ModuleMessage},
     osd::OsdId,
     ui::{PILL_RADIUS, icon},
@@ -25,8 +25,8 @@ pub const TIMER_MODULE_IDENTIFIER: &str = "timer";
 #[serde(default)]
 struct TimerModuleConfig {
     /// default icon to show if none is set
-    // TODO: deserialize directly as icon
-    default_icon: String,
+    #[serde(deserialize_with = "deserialize_icon")]
+    default_icon: Icon,
 
     /// heading to show in the notification
     heading: String,
@@ -37,7 +37,7 @@ struct TimerModuleConfig {
 impl Default for TimerModuleConfig {
     fn default() -> Self {
         Self {
-            default_icon: Icon::AlarmClock.to_string(),
+            default_icon: Icon::AlarmClock,
 
             heading: "Timer Expired!".to_string(),
             persistent: true,
@@ -115,12 +115,12 @@ impl Module for TimerModule {
         }
 
         let Some(duration) = duration else {
-            warn!("now adding timer because no duration was given");
+            warn!("not adding timer because no duration was given");
             return None;
         };
 
         Some(TimerMessage::Create(
-            icon.unwrap_or(Icon::from_name(&self.config.default_icon).unwrap_or(Icon::Clock)),
+            icon.unwrap_or(self.config.default_icon),
             desc.unwrap_or(format!("{} seconds have elapsed", duration.as_secs())),
             duration,
         ))

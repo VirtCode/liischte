@@ -1,6 +1,6 @@
 use std::{hash::Hasher, time::Duration};
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use iced::{
     Element, Renderer, Subscription, Task, Theme,
     advanced::subscription::{EventStream, Recipe, from_recipe},
@@ -15,7 +15,7 @@ use lucide_icons::Icon;
 use serde::Deserialize;
 
 use crate::{
-    config::CONFIG,
+    config::{CONFIG, deserialize_duration_seconds, deserialize_icon},
     module::{Module, ModuleMessage},
     osd::OsdId,
     ui::icon,
@@ -27,7 +27,8 @@ pub const PROCESS_MODULE_IDENTIFIER: &str = "process";
 #[serde(default)]
 struct ProcessModuleConfig {
     /// polling rate to poll processes in seconds
-    polling_rate: u64,
+    #[serde(deserialize_with = "deserialize_duration_seconds")]
+    polling_rate: Duration,
 
     /// indicators to show based on which processes are running
     indicators: Vec<ProcessModuleConfigItem>,
@@ -37,16 +38,15 @@ struct ProcessModuleConfig {
 struct ProcessModuleConfigItem {
     /// start of cmdline of the process
     cmdline: String,
+
     /// icon to show in that case
-    icon: String,
+    #[serde(deserialize_with = "deserialize_icon")]
+    icon: Icon,
 }
 
 impl Default for ProcessModuleConfig {
     fn default() -> Self {
-        Self {
-            polling_rate: 600, // every 10 minutes
-            indicators: Vec::new(),
-        }
+        Self { polling_rate: Duration::from_mins(10), indicators: Vec::new() }
     }
 }
 
@@ -60,8 +60,7 @@ pub enum ProcessMessage {
 }
 
 pub struct ProcessModule {
-    rate: Duration,
-    config: Vec<(String, Icon)>,
+    config: ProcessModuleConfig,
 
     /// this is actually the current state
     icons: Vec<(u64, Icon)>,
@@ -71,22 +70,7 @@ impl ProcessModule {
     pub fn new() -> Result<Self> {
         let config: ProcessModuleConfig = CONFIG.module(PROCESS_MODULE_IDENTIFIER);
 
-        let icons = config
-            .indicators
-            .into_iter()
-            .map(|item| {
-                let icon = Icon::from_name(&item.icon)
-                    .with_context(|| format!("icon `{}` not recognized", item.icon))?;
-
-                Ok((item.cmdline, icon))
-            })
-            .collect::<Result<_>>()?;
-
-        Ok(Self {
-            config: icons,
-            icons: Vec::new(),
-            rate: Duration::from_secs(config.polling_rate),
-        })
+        Ok(Self { config, icons: Vec::new() })
     }
 }
 
@@ -94,7 +78,7 @@ impl Module for ProcessModule {
     type Message = ProcessMessage;
 
     fn subscribe(&self) -> Subscription<Self::Message> {
-        from_recipe(ProcessMonitor(self.rate)).map(Self::Message::Processes)
+        from_recipe(ProcessMonitor(self.config.polling_rate)).map(Self::Message::Processes)
     }
 
     fn pass_message(&self, message: &str) -> Option<Self::Message> {
@@ -106,12 +90,13 @@ impl Module for ProcessModule {
             ProcessMessage::Processes(infos) => {
                 self.icons = self
                     .config
+                    .indicators
                     .iter()
-                    .filter_map(|(cmdline, icon)| {
+                    .filter_map(|item| {
                         infos
                             .iter()
-                            .find(|process| process.cmdline.starts_with(cmdline))
-                            .map(|process| (process.pid, *icon))
+                            .find(|process| process.cmdline.starts_with(&item.cmdline))
+                            .map(|process| (process.pid, item.icon))
                     })
                     .collect()
             }
