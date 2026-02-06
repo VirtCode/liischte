@@ -18,7 +18,7 @@ use iced_winit::futures::BoxStream;
 use liischte_lib::sysfs::power::{
     BatteryPowerDevice, MainsPowerDevice, PowerDevice, PowerDeviceKind,
 };
-use log::{debug, error, info};
+use log::{debug, error, info, warn};
 use lucide_icons::Icon;
 use serde::Deserialize;
 
@@ -103,7 +103,15 @@ impl PowerModule {
                         || config.batteries.contains(&device.0.device.name)
                     {
                         batteries.push(Battery {
-                            capacity: device.read_capacity().await?,
+                            capacity: device.read_capacity().await.unwrap_or_else(|e| {
+                                // we make this optional because some laptop vendors refuse to
+                                // expose this, but often we only have one battery anyways
+                                warn!(
+                                    "failed to read battery capacity, weights might be off ({e:#})"
+                                );
+
+                                20.0 // 20Wh dummy capacity
+                            }),
                             charge: device.read_charge().await?,
                             device,
                         });
