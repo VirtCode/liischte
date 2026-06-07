@@ -17,7 +17,7 @@ serde_json = "1.0.145"
 # logging and error handling
 anyhow = "1.0.100"
 log = "0.4.28"
-futures-core = "0.3.31"
+futures-core = "0.3.32"
 pin-project-lite = "0.2.16"
 
 # various features

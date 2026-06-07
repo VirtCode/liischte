@@ -8,11 +8,11 @@ use hyprland::{Hyprland, HyprlandMessage};
 use iced::{
     Background, Border, Color, Font, Length, Limits, Padding, Subscription, Task, Theme,
     alignment::{Horizontal, Vertical},
-    application,
     runtime::platform_specific::wayland::layer_surface::{
         IcedMargin, IcedOutput, SctkLayerSurfaceSettings,
     },
-    widget::{Column, column, container::Style, vertical_space},
+    theme,
+    widget::{Column, column, container::Style, space},
     window::Id as SurfaceId,
 };
 use iced_winit::commands::{
@@ -31,7 +31,8 @@ use module::{
     process::{PROCESS_MODULE_IDENTIFIER, ProcessModule},
     timer::{TIMER_MODULE_IDENTIFIER, TimerModule},
 };
-use ui::{empty, separator, window::layer_window};
+use tokio::runtime::Handle;
+use ui::{empty, separator};
 
 use iced::widget::container as create_container;
 
@@ -39,10 +40,7 @@ use crate::{
     cli::{Command, read_command},
     ipc::{IpcMessage, IpcServer},
     module::mako::{MAKO_MODULE_IDENTIFIER, MakoModule},
-    ui::{
-        outputs::{OutputHandler, OutputMessage},
-        runtime::ExistingRuntime,
-    },
+    ui::outputs::{OutputHandler, OutputMessage},
 };
 use crate::{
     module::ModuleId,
@@ -60,47 +58,39 @@ mod ipc;
 mod osd;
 mod ui;
 
-#[tokio::main]
-async fn main() -> Result<()> {
+fn main() -> Result<()> {
     env_logger::init_from_env(env_logger::Env::new().default_filter_or("liischte=info"));
 
     // read command from the cli
     match read_command() {
         Some(Command::Pass { module, message }) => {
-            ipc::send(IpcMessage::ModuleUpdate(module, message)).await?;
-            return Ok(());
+            return ipc::send(IpcMessage::ModuleUpdate(module, message));
         }
         Some(Command::Layer { layer }) => {
-            ipc::send(IpcMessage::LayerChange(layer)).await?;
-            return Ok(());
+            return ipc::send(IpcMessage::LayerChange(layer));
         }
         None => {}
     }
 
-    let app = layer_window::<_, Message, _, _, ExistingRuntime>(
-        Liischte::update,
-        Liischte::view,
-        Liischte::subscription,
-    )
-    .style(|_, _| application::Appearance {
-        background_color: Color::TRANSPARENT,
-        text_color: CONFIG.looks.foreground,
-        icon_color: CONFIG.looks.foreground,
-    })
-    .settings(iced::Settings {
-        default_font: Font::with_name(&CONFIG.looks.font),
-        default_text_size: 16.into(),
-        antialiasing: true,
-        fonts: vec![LUCIDE_FONT_BYTES.into()],
-        ..Default::default()
-    });
+    let app = iced::daemon(Liischte::boot, Liischte::update, Liischte::view)
+        .executor::<tokio::runtime::Runtime>() // force this to tokio as we use lots of tokio's primitives
+        .subscription(Liischte::subscription)
+        .style(|_, _| theme::Style {
+            background_color: Color::TRANSPARENT,
+            text_color: CONFIG.looks.foreground,
+            icon_color: CONFIG.looks.foreground,
+        })
+        .settings(iced::Settings {
+            default_font: Font::with_name(&CONFIG.looks.font),
+            default_text_size: 16.into(),
+            antialiasing: true,
+            fonts: vec![LUCIDE_FONT_BYTES.into()],
+            ..Default::default()
+        });
 
+    // run iced app
     info!("starting liischte");
-    let mut liischte = Liischte::new();
-    liischte.init().await;
-
-    // run iced app with surface
-    app.run_with(move || (liischte, Task::none())).context("failed to start iced application")
+    app.run().context("failed to run iced application")
 }
 
 #[derive(Debug, Clone)]
@@ -130,21 +120,30 @@ struct Liischte {
 }
 
 impl Liischte {
-    pub fn new() -> Self {
-        Self {
-            modules: IndexMap::new(),
-            clock: Clock::new(),
-            hyprland: None,
+    /// returns an initialized version of the state
+    pub fn boot() -> Self {
+        // our initialization is async, so we run it on the current runtime
+        Handle::current().block_on(async {
+            let mut this = Self {
+                modules: IndexMap::new(),
+                clock: Clock::new(),
+                hyprland: None,
 
-            osd: if CONFIG.osd.enabled { Some(OsdHandler::new()) } else { None },
+                osd: if CONFIG.osd.enabled { Some(OsdHandler::new()) } else { None },
 
-            module_names: HashMap::new(),
-            ipc: None,
+                module_names: HashMap::new(),
+                ipc: None,
 
-            outputs: OutputHandler::new(),
-            alive: false,
-            surface: SurfaceId::unique(),
-        }
+                outputs: OutputHandler::new(),
+                alive: false,
+                surface: SurfaceId::unique(),
+            };
+
+            info!("initializing modules");
+            this.init().await;
+
+            this
+        })
     }
 
     /// initializes the liischte by initializing all required modules
@@ -220,7 +219,6 @@ impl Liischte {
             exclusive_zone: CONFIG.looks.width as i32,
             size_limits: Limits::NONE,
 
-            pointer_interactivity: true,
             namespace: CONFIG.namespace.clone(),
 
             ..Default::default()
@@ -350,7 +348,7 @@ impl Liischte {
                 .as_ref()
                 .map(|hl| hl.render().map(Message::Hyprland))
                 .unwrap_or_else(|| column![].into()),
-            vertical_space(),
+            space::vertical(),
             Column::from_iter(infos).spacing(4),
             separator(has_infos),
             Column::from_iter(status).spacing(4),

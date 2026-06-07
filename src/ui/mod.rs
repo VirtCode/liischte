@@ -1,6 +1,6 @@
 use iced::{
     Color, Font, Radius,
-    widget::{Rule, Space, Text, horizontal_rule, rule, text},
+    widget::{Rule, Space, Text, rule, text},
 };
 use lucide_icons::Icon;
 
@@ -8,7 +8,6 @@ use crate::config::CONFIG;
 
 pub mod outputs;
 pub mod progress;
-pub mod runtime;
 pub mod window;
 
 /// radius to use to create a pill shape
@@ -21,12 +20,12 @@ pub const PILL_RADIUS: Radius = Radius {
 
 /// creates a separator for the bar
 pub fn separator<'a>(visible: bool) -> Rule<'a> {
-    horizontal_rule(2)
+    rule::horizontal(2)
         .style(move |_| rule::Style {
             color: if visible { CONFIG.looks.semi } else { Color::TRANSPARENT },
-            width: 2,
             fill_mode: rule::FillMode::Full,
             radius: Radius::new(2),
+            snap: true,
         })
         .width(32)
 }
@@ -38,5 +37,5 @@ pub fn icon<'a>(icon: Icon) -> Text<'a> {
 
 /// creates an empty widget
 pub fn empty() -> Space {
-    Space::new(0, 0)
+    Space::new()
 }

@@ -4,6 +4,7 @@ use std::{
     fs::{self},
     path::PathBuf,
     process::exit,
+    str::FromStr,
     sync::LazyLock,
     time::Duration,
 };
@@ -43,8 +44,8 @@ where
 {
     let string = String::deserialize(deserializer)?;
 
-    Color::parse(&string)
-        .ok_or(serde::de::Error::unknown_variant(&string, &["#RRGGBB", "#RRGGBBAA"]))
+    Color::from_str(&string)
+        .map_err(|_| serde::de::Error::unknown_variant(&string, &["#RRGGBB", "#RRGGBBAA"]))
 }
 
 /// deserializes an icon from a toml string

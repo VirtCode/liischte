@@ -41,7 +41,7 @@ where
         Size { width: Length::Shrink, height: self.height.into() }
     }
 
-    fn layout(&self, _tree: &mut Tree, _renderer: &Renderer, limits: &layout::Limits) -> Node {
+    fn layout(&mut self, _tree: &mut Tree, _renderer: &Renderer, limits: &layout::Limits) -> Node {
         layout::atomic(limits, self.width_outer, self.height)
     }
 

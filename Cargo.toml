@@ -11,15 +11,15 @@ anyhow = "1.0.100"
 
 tokio = { version = "1.48.0", features = ["rt-multi-thread", "macros"] }
 tokio-stream = { version = "0.1.17", features = ["sync"] }
-futures = "0.3.31"
+futures = "0.3.32"
 
-# we use our own fork of cosmic's iced fork
-iced = { git = "https://github.com/VirtCode/iced.git", features = ["advanced", "tokio", "winit", "wayland", "multi-window"] }
-iced_winit = { git = "https://github.com/VirtCode/iced.git", features = ["wayland", "multi-window"], default-features = false }
+# we use cosmic's iced fork
+iced = { git = "https://github.com/pop-os/iced.git", features = ["advanced", "tokio", "winit", "wayland", "canvas", "cctk"] }
+iced_winit = { git = "https://github.com/pop-os/iced.git", features = ["wayland"], default-features = false }
 wayland-client = "0.31.11"
 
 clap = { version = "4.5.49", features = [ "derive" ] }
-log = "0.4.28"
+log = "0.4.29"
 env_logger = "0.11.7"
 
 serde = { version = "1.0.228", features = ["derive"] }

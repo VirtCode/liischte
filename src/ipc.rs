@@ -1,4 +1,6 @@
-use std::{env, hash::Hasher as _, path::PathBuf, sync::Arc};
+use std::{
+    env, hash::Hasher as _, io::Write as _, os::unix::net::UnixStream, path::PathBuf, sync::Arc,
+};
 
 use anyhow::{Context, Result};
 use futures::StreamExt;
@@ -12,8 +14,8 @@ use log::{debug, info, trace, warn};
 use serde::{Deserialize, Serialize};
 use tokio::{
     fs,
-    io::{AsyncReadExt, AsyncWriteExt},
-    net::{UnixListener, UnixStream},
+    io::AsyncReadExt,
+    net::UnixListener,
     sync::broadcast::{self, Receiver},
 };
 use tokio_stream::wrappers::BroadcastStream;
@@ -101,13 +103,11 @@ impl IpcServer {
     }
 }
 
-/// sends to the ipc socket as a client
-pub async fn send(msg: IpcMessage) -> Result<()> {
+/// sends to the ipc socket as a client synchronously
+pub fn send(msg: IpcMessage) -> Result<()> {
     UnixStream::connect(socket_path())
-        .await
         .context("failed to connect to ipc socket")?
         .write_all(&serde_json::to_vec(&msg).context("failed to serialize message")?)
-        .await
         .context("failed to write to ipc socket")
 }
 

@@ -45,7 +45,7 @@ impl Hyprland {
 
         let mut workspaces = instance.get_all_workspaces().await?;
         workspaces.retain(|state| state.monitor_id == Some(config.monitor) && state.id >= 0);
-        workspaces.sort_by(|a, b| a.id.cmp(&b.id));
+        workspaces.sort_by_key(|a| a.id);
 
         Ok(Self { config, instance, selected, workspaces })
     }
@@ -59,7 +59,7 @@ impl Hyprland {
         match message {
             HyprlandMessage::State(selected, mut workspaces) => {
                 // sort by id if they are created out of order
-                workspaces.sort_by(|a, b| a.id.cmp(&b.id));
+                workspaces.sort_by_key(|a| a.id);
 
                 self.selected = selected;
                 self.workspaces = workspaces;
@@ -103,8 +103,8 @@ impl Hyprland {
             self.config.rounding
         };
 
-        mouse_area(container(Space::new(self.config.size, self.config.size)).style(move |_| {
-            Style {
+        mouse_area(container(Space::new().width(self.config.size).height(self.config.size)).style(
+            move |_| Style {
                 background: Some(Background::Color(background)),
                 border: Border {
                     color: CONFIG.looks.foreground,
@@ -112,8 +112,8 @@ impl Hyprland {
                     radius: Radius::new(radius),
                 },
                 ..Default::default()
-            }
-        }))
+            },
+        ))
         .on_release(HyprlandMessage::SelectAbsolute(state.id))
         .into()
     }

@@ -208,7 +208,7 @@ where
         Size { width: Length::Fill, height: Length::Fill }
     }
 
-    fn layout(&self, _tree: &mut Tree, _renderer: &Renderer, limits: &Limits) -> Node {
+    fn layout(&mut self, _tree: &mut Tree, _renderer: &Renderer, limits: &Limits) -> Node {
         layout::atomic(limits, Length::Fill, Length::Fill)
     }
 

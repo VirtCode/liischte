@@ -197,8 +197,8 @@ impl Module for TimerModule {
                         border: Border::default().width(0).rounded(PILL_RADIUS),
                         bar: Background::Color(CONFIG.looks.foreground),
                     })
-                    .height(2.0)
-                    .width(24)
+                    .girth(2.0)
+                    .length(24)
                 ]
                 .align_x(Horizontal::Center)
                 .spacing(-4.0)

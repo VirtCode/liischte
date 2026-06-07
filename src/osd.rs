@@ -148,7 +148,6 @@ impl OsdHandler {
             exclusive_zone: -1,
             size_limits: Limits::NONE,
 
-            pointer_interactivity: false,
             namespace: format!("{}-osd", CONFIG.namespace),
 
             ..Default::default()
