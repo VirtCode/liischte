@@ -37,6 +37,7 @@ For a quick overview about what the bar can do, here's a quick list of the featu
 - **Backlight** change information with a simple _osd_.
 - **Running Processes** which shows an _info_ icon for certain processes defined in the config if they are running.
 - **Timers** which are shown as _infos_ and can be dynamically added via the IPC.
+- **Mako Modes** which can be shown as _infos_ which connects to your mako daemon.
 
 ## technical decisions
 **It is a bar and _not_ a shell.** Things outside that of a bar are explicitly left to other pieces of software. This avoids bloating the scope of this project. For most things in a full shell are either easily done in the terminal or some other projects exist which does mostly what you need (like e.g. [mako](https://github.com/emersion/mako) for notifications). The singular exception to this is the inbuilt OSD, but that is because the bar (e.g. volume changing) would be barely useable without.

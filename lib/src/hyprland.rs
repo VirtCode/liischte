@@ -80,13 +80,15 @@ impl HyprlandInstance {
 
     /// runs a dispatcher to select the workspace with the given id
     pub async fn run_select_workspace(&self, id: i64) -> Result<()> {
-        self.dispatch_command(&format!("dispatch workspace {id}")).await.map(|_| ())
+        self.dispatch_command(&format!("dispatch hl.dsp.focus({{ workspace = \"{id}\" }})"))
+            .await
+            .map(|_| ())
     }
 
     /// runs a dispatcher to select a workspace relatively given an offset
     pub async fn run_select_workspace_relative(&self, offset: i64) -> Result<()> {
         self.dispatch_command(&format!(
-            "dispatch workspace m{}{offset}",
+            "dispatch hl.dsp.focus({{ workspace = \"m{}{offset}\"}})",
             if offset > 0 { "+" } else { "" }
         ))
         .await
