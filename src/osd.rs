@@ -148,6 +148,8 @@ impl OsdHandler {
             exclusive_zone: -1,
             size_limits: Limits::NONE,
 
+            input_zone: Some(Vec::new()),
+
             namespace: format!("{}-osd", CONFIG.namespace),
 
             ..Default::default()
